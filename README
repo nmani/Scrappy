@@ -1,27 +1,7 @@
 # Scrappy - Simple Stupid Spider base on Web::Scraper inspired by Dancer
-# brain dump, will use WWW::Mechanize::Plugin::Web::Scraper;
 
-ua random_user_agent;
-sess 'c:/folder/';
-goto $url;
-var user_name => grab '#profile a span', 'TEXT';
-var user_records => grab '#this td';
+#!/usr/bin/perl
+use Scrappy qw/:syntax/;
 
-foreach my $record (keys %{var->{user_records}}) {
-    var $_
-}
-
-save file($_), $data;
-save here, var->{records}, '$text';
-
-get $url, {
-    this => 'that',
-    so   => 'what'
-};
-
-post $url, {
-    method => ,
-    
-}
-
-my $self = stash;
+init;
+user_agent random_ua;
