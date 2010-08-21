@@ -6,7 +6,7 @@ use warnings;
 package Scrappy;
 use WWW::Mechanize::Pluggable;
 use File::ShareDir ':ALL';
-use File::Util;
+use File::Slurp;
 
 our $class_Instance = undef;
 
@@ -188,12 +188,12 @@ sub random_ua {
     my ($browser, $os) = @_;
        $browser = lc $browser;
        $browser = 'any' unless $browser;
-       $browser = 'internet explorer'
+       $browser = 'explorer'
             if lc($browser) eq 'internet explorer' ||
                lc($browser) eq 'explorer' ||
                lc($browser) eq 'ie';
     my @browsers = (
-        'internet explorer',
+        'explorer',
         'chrome',
         'firefox',
         'opera',
@@ -204,13 +204,15 @@ sub random_ua {
         'Linux',
         'Macintosh'
     );
-    die "Can't load user-agents from unrecognized browser `$browser`"
-        unless grep $browser, @browsers || $browser eq 'any';
+    if ($browser ne 'any') {
+        die "Can't load user-agents from unrecognized browser `$browser`" unless
+            grep /^$browser$/, @browsers;
+    }
         
     if ($os) {
         $os = ucfirst(lc($os));
-        die "Can't filter user-agents with an unrecognized Os `$os`"
-            unless grep /^$os$/, @oss;
+        die "Can't filter user-agents with an unrecognized Os `$os`" unless
+            grep /^$os$/, @oss;
     }
     
     my @selection = ();
@@ -221,10 +223,9 @@ sub random_ua {
         }
         else {
             foreach my $file (@browsers) {
-                my $u = "support/$file.txt";
-                   $u = dist_file('Scrappy', "support/$file.txt") unless -e $u;
-                my $f = File::Util->new();
-                push @selection, $f->load_file($u, '--as-lines');
+                my $u = dist_dir('Scrappy') . "/support/$file.txt";
+                   $u = "share/support/$file.txt" unless -e $u;
+                push @selection, read_file($u);
             }
             var "user-agents/any" => @selection;
         }
@@ -234,10 +235,9 @@ sub random_ua {
             @selection = @{var->{'user-agents'}->{$browser}};
         }
         else {
-            my $u = "support/$browser.txt";
-               $u = dist_file('Scrappy', "support/$browser.txt") unless -e $u;
-            my $f = File::Util->new();
-            push @selection, $f->load_file($u, '--as-lines');
+            my $u = dist_dir('Scrappy') . "/support/$browser.txt";
+               $u = "share/support/$browser.txt" unless -e $u;
+            push @selection, read_file($u);
             var "user-agents/$browser" => @selection;
         }
     }
