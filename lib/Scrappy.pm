@@ -525,8 +525,10 @@ returns the modified content.
 =cut
 
 sub data {
-    unless ($_[1]) {
-        self->update_html($_[0]);
+    if ($_[0]) {
+        unless ($_[1]) {
+            self->update_html($_[0]);
+        }
     }
     return self->content(@_);
 }
