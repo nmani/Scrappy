@@ -1,0 +1,6 @@
+# Scrappy - Simple Stupid Spider base on Web Scraper inspired by Dancer
+# TODO
+
+- ver 0.6
+  -   add config support
+  -   add cookie session support
