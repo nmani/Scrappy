@@ -42,6 +42,8 @@ BEGIN {
         store
         download
         list
+        fst
+        lst
     );
     %EXPORT_TAGS = ( syntax => [ @EXPORT_OK ] );
 }
@@ -586,6 +588,34 @@ sub list {
     die 'The argument passed to the list method must be an arrayref'
         if ref($_[0]) ne "ARRAY";
     return @{$_[0]};
+}
+
+=method fst
+
+The fst (first) method shifts the passed in arrayref returning the first element
+in the array shortening it by one.
+
+    var foo => fst grab '.class', { name => 'TEXT' };
+
+=cut
+
+sub fst {
+    my @array = list @_;
+    return @array;
+}
+
+=method lst
+
+The lst (last) method pops the passed in arrayref returning the last element
+in the array shortening it by one.
+
+    var foo => lst grab '.class', { name => 'TEXT' };
+
+=cut
+
+sub lst {
+    my @array = list @_;
+    return pop @array;
 }
 
 1;
