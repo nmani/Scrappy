@@ -52,9 +52,14 @@ BEGIN {
     
     init;
     user_agent random_ua;
-    get 'http://google.com', {
-        q => ''
+    get 'http://google.com';
+    
+    form fields => {
+        q => "what is perl"
     };
+    
+    var 'results' =>
+        grab '#search li h3 a', { name => 'TEXT', link => '@href' };
     
 
 =head3 DESCRIPTION
