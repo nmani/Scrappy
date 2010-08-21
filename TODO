@@ -7,6 +7,8 @@
   -   allow var merging instead of overwriting via merge keyword
   -   add filter function (drill-down web::scraper utility)
 - ver 0.52
-  -   add fst and lst method which will shift and pop scraped resultsets
+  x   fixed the fst method
+- ver 0.52
+  x   add fst and lst method which will shift and pop scraped resultsets
 - ver 0.51
   x   add list keyword, will return an array for iteration given an arrayref or hashref

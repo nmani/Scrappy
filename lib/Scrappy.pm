@@ -601,7 +601,7 @@ in the array shortening it by one.
 
 sub fst {
     my @array = list @_;
-    return @array;
+    return shift @array;
 }
 
 =method lst
