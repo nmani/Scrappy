@@ -5,6 +5,8 @@ use warnings;
 
 package Scrappy;
 use WWW::Mechanize::Pluggable;
+use File::ShareDir ':ALL';
+use File::Util;
 
 our $class_Instance = undef;
 
@@ -20,7 +22,11 @@ BEGIN {
         var
         random_ua
         form
+        get
+        post
         grab
+        loaded
+        status        
     );
     %EXPORT_TAGS = ( syntax => [ @EXPORT_OK ] );
 }
@@ -150,13 +156,12 @@ user-agent header in your request is how inquiring application determine your
 browser and environment. The first argument should be the name of the web browser,
 supported web browsers are any, chrome, ie or explorer, opera, safari, and firfox.
 Obviously using the keyword `any` will select from any available browser. The
-second argument should be the name of the desired operating system, supported
-operating systems are any, windows, macintosh, linux. If arguments are specified,
-the `any` keywords will be used. 
+second argument which is optional should be the name of the desired operating
+system, supported operating systems are windows, macintosh, linux. 
 
     init;
     user_agent random_ua;
-    # same as random_ua 'any', 'any';
+    # same as random_ua 'any';
     
 e.g. for a Linux-specific user-agent use the following...
     
@@ -166,8 +171,66 @@ e.g. for a Linux-specific user-agent use the following...
 =cut
 
 sub random_ua {
-    my ($requested_user_agent) = shift;
-    return ;
+    my ($browser, $os) = @_;
+       $browser = lc $browser;
+       $browser = 'any' unless $browser;
+       $browser = 'internet explorer'
+            if lc($browser) eq 'internet explorer' ||
+               lc($browser) eq 'explorer' ||
+               lc($browser) eq 'ie';
+    my @browsers = (
+        'internet explorer',
+        'chrome',
+        'firefox',
+        'opera',
+        'safari'
+    );
+    my @oss = (
+        'Windows',
+        'Linux',
+        'Macintosh'
+    );
+    die "Can't load user-agents from unrecognized browser `$browser`"
+        unless grep $browser, @browsers || $browser eq 'any';
+        
+    if ($os) {
+        $os = ucfirst(lc($os));
+        die "Can't filter user-agents with an unrecognized Os `$os`"
+            unless grep /^$os$/, @oss;
+    }
+    
+    my @selection = ();
+    
+    if ($browser eq 'any') {
+        if (var->{'user-agents'}->{any}) {
+            @selection = @{var->{'user-agents'}->{any}};
+        }
+        else {
+            foreach my $file (@browsers) {
+                my $u = "support/$file.txt";
+                   $u = dist_file('Scrappy', "support/$file.txt") unless -e $u;
+                my $f = File::Util->new();
+                push @selection, $f->load_file($u, '--as-lines');
+            }
+            var "user-agents/any" => @selection;
+        }
+    }
+    else {
+        if (var->{'user-agents'}->{$browser}) {
+            @selection = @{var->{'user-agents'}->{$browser}};
+        }
+        else {
+            my $u = "support/$browser.txt";
+               $u = dist_file('Scrappy', "support/$browser.txt") unless -e $u;
+            my $f = File::Util->new();
+            push @selection, $f->load_file($u, '--as-lines');
+            var "user-agents/$browser" => @selection;
+        }
+    }
+    
+    @selection = grep /$os/, @selection if $os;
+    
+    return $selection[rand(@selection)];
 }
 
 =method form
@@ -185,7 +248,65 @@ the exact same arguments, yada, yada.
 =cut
 
 sub form {
-    self->submit_form(@_);
+    return self->submit_form(@_);
+}
+
+=method get
+
+The get method is a shortcut to the WWW:Mechanize get method. This
+method takes a URL or URI and returns an HTTP::Response object.
+
+=cut
+
+sub get {
+    return self->get(@_);
+}
+
+=method post
+
+The post method is a shortcut to the WWW:Mechanize post method. This
+method takes a URL or URI and a hashref of key/value pairs then returns an
+HTTP::Response object. Alternatively the post object can be used traditionally
+(ugly), and passed additional arguments;
+
+    # our pretty way
+    post $requested_url, {
+        query => 'some such stuff'
+    };
+    
+    # traditionally
+    post $requested_url,
+        'Content-Type' => 'multipart/form-data',
+        'Content'      => {
+            user                => $facebook->{user},
+            profile_id          => $prospect->{i},
+            message             => '',
+            source              => '',
+            src                 => 'top_bar',
+            submit              => 1,
+            post_form_id        => $post_formid,
+            fb_dtsg             => 'u9MeI',
+            post_form_id_source => 'AsyncRequest'
+        };
+
+Note! Our prettier version of the post method use a content-type of
+application/x-www-form-urlencoded by default, to use multipart/form-data,
+please use the traditional style, sorry.
+
+=cut
+
+sub post {
+    my ($url, $params) = @_;
+    if ($url && ref($params) eq "HASH") {
+        self->post(
+            $url,
+            'Content-Type' => 'application/x-www-form-urlencoded',
+            'Content'      => $params
+        );
+    }
+    else {
+        return self->post(@_);
+    }
 }
 
 =method grab
@@ -195,16 +316,60 @@ the exact same arguments with a little bit of our own added magic.
 
     init;
     get $requested_url;
-    grab '#profile li a', 'text';
+    grab '#profile li a';
+    
     # meaning you can do cool stuff like...
-    # var user_name => grab '#profile li a', 'text';
+    var user_name => grab '#profile li a';
+    
+    # the traditional use is to provide a selector and mappings ..., e.g.
+    grab '#profile li', { name => 'TEXT', link => '@href' };
 
 =cut
 
 sub grab {
     my ($selector, $mapping) = @_;
-    my $temp = self->scrape( $selector, "data[]", $mapping );
-    return $temp->{data}[1] ? $temp->{data} : $temp->{data}[0];
+    if ($mapping) {
+        my $temp = self->scrape( $selector, "data[]", $mapping );
+        return $temp->{data};
+    }
+    else {
+        my $temp = self->scrape( $selector, "data[]", { everything => 'TEXT' } );
+        return $temp->{data}[0]->{everything};
+    }
+}
+
+=method loaded
+
+The loaded method is a shortcut to the WWW:Mechanize success method. This
+method returns true/false based on whether the last request was successful.
+
+    init;
+    get $requested_url;
+    if (loaded) {
+        grab ...
+    }
+
+=cut
+
+sub loaded {
+    return self->success;
+}
+
+=method status
+
+The status method is a shortcut to the WWW:Mechanize status method. This
+method returns the 3-digit HTTP status code of the response.
+
+    init;
+    get $requested_url;
+    if (status == 200) {
+        grab ...
+    }
+
+=cut
+
+sub status {
+    return self->status;
 }
 
 1;

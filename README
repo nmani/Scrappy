@@ -1,7 +1,19 @@
 # Scrappy - Simple Stupid Spider base on Web::Scraper inspired by Dancer
 
 #!/usr/bin/perl
+# simple cpan example
 use Scrappy qw/:syntax/;
 
 init;
-user_agent random_ua;
+user_agent random_ua 'firefox';
+
+get 'http://search.cpan.org/recent';
+
+# status == 200 is equivalent to loaded
+if (status == 200) {
+    var date    => grab '.datecell b';
+    var modules => grab '#cpansearch li a', { name => 'TEXT', link => '@href' };
+}
+
+print var->{date}, "\n";
+print $_->{name} , "\n" for @{ var->{modules} };
