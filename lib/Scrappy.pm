@@ -41,11 +41,12 @@ BEGIN {
         www
         store
         download
+        list
     );
     %EXPORT_TAGS = ( syntax => [ @EXPORT_OK ] );
 }
 
-=head2 SYNOPSIS
+=head1 SYNOPSIS
 
     #!/usr/bin/perl
     use Scrappy qw/:syntax/;
@@ -62,14 +63,18 @@ BEGIN {
         grab '#search li h3 a', { name => 'TEXT', link => '@href' };
     
 
-=head3 DESCRIPTION
+=head1 DESCRIPTION
 
 Scrappy is an easy (and hopefully fun) way of scraping, spidering, and/or
 harvesting information from web pages. Internally Scrappy uses the awesome
 Web::Scraper and WWW::Mechanize modules so as such Scrappy imports its
-awesomeness. Scrappy is inspired by the fun and easy-to-use Dancer api. Beyond
-being a pretty api for WWW::Mechanize::Plugin::Web::Scraper, Scrappy also has
-the following features: automatic cookie session storage with resume.
+awesomeness. Scrappy is inspired by the fun and easy-to-use Dancer API. Beyond
+being a pretty API for WWW::Mechanize::Plugin::Web::Scraper, Scrappy also has
+the persistant cookie handling, session handling, and more.
+
+Scrappy == 'Scraper Happy' or 'Happy Scraper'; If you like you may call it
+Scrapy although Python has a web scraping framework by that name and we don't
+plagiarize Python code here.
 
 =cut
 
@@ -155,7 +160,10 @@ sub var {
             my @keys = split /\//, $key;
             my $var  = self->{Scrappy}->{stash};
             for (my $i = 0; $i < @keys; $i++) {
-                $var->{$keys[$i]} = (($i+1) == @keys) ? $value : {};
+                $var->{$keys[$i]} = $value
+                    if ($i+1) == @keys;
+                $var->{$keys[$i]} = {}
+                    if ($i+1) != @keys && ! defined $var->{$keys[$i]};
                 $var = $var->{$keys[$i]};
             }
             return $value;
@@ -561,6 +569,23 @@ The download method is an alias to the store method.
 
 sub download {
     return store(@_);
+}
+
+=method list
+
+The list method is an aesthetically pleasing method of dereferencing an
+arrayref. This method dies if the argument is not an arrayref.
+
+    foreach my $item (list var->{items}) {
+        ...
+    }
+
+=cut
+
+sub list {
+    die 'The argument passed to the list method must be an arrayref'
+        if ref($_[0]) ne "ARRAY";
+    return @{$_[0]};
 }
 
 1;

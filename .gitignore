@@ -1,4 +1,4 @@
 *.kpf
-Scrappy-0.5
-Scrappy-0.5/*
-Scrappy-0.5.tar.gz
+Scrappy-*
+Scrappy-*/*
+Scrappy-*.tar.gz
