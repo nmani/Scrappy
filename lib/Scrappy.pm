@@ -26,7 +26,21 @@ BEGIN {
         post
         grab
         loaded
-        status        
+        status
+        reload
+        back
+        page
+        response
+        content_type
+        domain
+        ishtml
+        title
+        text
+        html
+        data
+        www
+        store
+        download
     );
     %EXPORT_TAGS = ( syntax => [ @EXPORT_OK ] );
 }
@@ -370,6 +384,178 @@ method returns the 3-digit HTTP status code of the response.
 
 sub status {
     return self->status;
+}
+
+=method reload
+
+The reload method is a shortcut to the WWW:Mechanize reload method. This
+method acts like the reload button in a browser, repeats the current request.
+
+=cut
+
+sub reload {
+    return self->reload;
+}
+
+=method back
+
+The back method is a shortcut to the WWW:Mechanize back method. This
+method is equivalent of hitting the "back" button in a browser, it returns
+the previous response (page), it will not backtrack beyond the first request.
+
+=cut
+
+sub back {
+    return self->back;
+}
+
+=method page
+
+The page method is a shortcut to the WWW:Mechanize uri method. This
+method returns the URI of the current page.
+
+=cut
+
+sub page {
+    return self->uri;
+}
+
+=method response
+
+The response method is a shortcut to the WWW:Mechanize response method. This
+method returns the HTTP::Repsonse object of the current page.
+
+=cut
+
+sub response {
+    return self->response;
+}
+
+=method content_type
+
+The content_type method is a shortcut to the WWW:Mechanize content_type method.
+This method returns the content_type of the current page.
+
+=cut
+
+sub content_type {
+    return self->content_type;
+}
+
+=method domain
+
+The domain method is a shortcut to the WWW:Mechanize base method.
+This method returns URI of the current page.
+
+=cut
+
+sub domain {
+    return self->base;
+}
+
+=method ishtml
+
+The ishtml method is a shortcut to the WWW:Mechanize is_html method.
+This method returns true/false on whether our content is HTML, according to the
+HTTP headers.
+
+=cut
+
+sub ishtml {
+    return self->is_html;
+}
+
+=method title
+
+The title method is a shortcut to the WWW:Mechanize title method.
+This method returns the content of the title tag if the current page is HTML,
+otherwise returns undef.
+
+=cut
+
+sub title {
+    return self->title;
+}
+
+=method text
+
+The text method is a shortcut to the WWW:Mechanize content method using
+the format argument and returns a text representation of the last page having
+all HTML markup stripped.
+
+=cut
+
+sub text {
+    return data( format => 'text');
+}
+
+=method html
+
+The html method is a shortcut to the WWW:Mechanize content method. This method
+returns the content of the current page.
+
+=cut
+
+sub html {
+    return data(@_);
+}
+
+=method data
+
+The data method is a shortcut to the WWW:Mechanize content method. This method
+returns the content of the current page. Additionally this method when passed
+a single argument, updates the content of the current page with that data and
+returns the modified content.
+
+=cut
+
+sub data {
+    unless ($_[1]) {
+        self->update_html($_[0]);
+    }
+    return self->content(@_);
+}
+
+=method www
+
+The www method is an alias to the self method. This method
+returns the current scraper application instance.
+
+=cut
+
+sub www {
+    return self(@_);
+}
+
+=method store
+
+The store method is a shortcut to the WWW:Mechanize save_content method.
+This method returns dumps the contents of the current page into the specified
+file. If the content-type does not begin with 'text', the content is saved as
+binary data. If the store method is passed a URI and a File Path, then it will
+follow the link, store the contents in the file and return to the previous page.
+
+=cut
+
+sub store {
+    if (@_==2) {
+        get $_[0];
+        store $_[1];
+        back;
+    }
+    else {
+        return self->save_content(@_);
+    }
+}
+
+=method download
+
+The download method is an alias to the store method.
+
+=cut
+
+sub download {
+    return store(@_);
 }
 
 1;
