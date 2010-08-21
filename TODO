@@ -4,3 +4,4 @@
 - ver 0.6
   -   add config support
   -   add cookie session support
+  -   allow var merging instead of overwriting
