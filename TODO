@@ -6,3 +6,4 @@
   -   add cookie session support
   -   allow var merging instead of overwriting via merge keyword
   -   add filter function (drill-down web::scraper utility)
+  -   add list keyword, will return an array for iteration given an arrayref or hashref
