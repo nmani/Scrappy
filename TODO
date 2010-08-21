@@ -5,3 +5,4 @@
   -   add config support
   -   add cookie session support
   -   allow var merging instead of overwriting
+  -   add filter function (drill-down web::scraper utility)
