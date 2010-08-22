@@ -3,7 +3,7 @@
 
 - ver 0.6
   -   add config support
-  -   add cookie session support
+  -   add cookie and session support
   -   allow var merging instead of overwriting via merge keyword
   -   add filter function (drill-down web::scraper utility)
   -   investigate performance
