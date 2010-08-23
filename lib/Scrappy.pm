@@ -207,12 +207,12 @@ e.g. for a Linux-specific user-agent use the following...
 
 sub random_ua {
     my ($browser, $os) = @_;
-       $browser = lc $browser;
        $browser = 'any' unless $browser;
-       $browser = 'explorer'
-            if lc($browser) eq 'internet explorer' ||
+       $browser = 'explorer' if
+               lc($browser) eq 'internet explorer' ||
                lc($browser) eq 'explorer' ||
                lc($browser) eq 'ie';
+       $browser = lc $browser;
     my @browsers = (
         'explorer',
         'chrome',
@@ -559,39 +559,63 @@ sub www {
 
 =method store
 
-The store method is a shortcut to the WWW:Mechanize save_content method.
-This method returns dumps the contents of the current page into the specified
-file. If the content-type does not begin with 'text', the content is saved as
-binary data. If the store method is passed a URI and a File Path, then it will
-follow the link, store the contents in the file and return to the previous page.
+The store method is a shortcut to the WWW:Mechanize save_content method. This
+method stores the contents of the current page into the specified file. If the
+content-type does not begin with 'text', the content is saved as binary data.
+
+    get $requested_url;
+    store '/tmp/foo.html';
 
 =cut
 
 sub store {
-    if (@_==2) {
-        get $_[0];
-        store $_[1];
-        back;
-    }
-    else {
-        return self->save_content(@_);
-    }
+    return self->save_content(@_);
 }
 
 =method download
 
-The download method is an alias to the store method.
+The download method is passed a URI, a Download Directory Path and a optionally
+a File Path, then it will follow the link and store the requests contents into
+the specified file without leaving the current page. Basically it downloads the
+contents of the request even (especially) when the request pushes a file download.
+
+    download $requested_url, '/tmp';
+    
+    # supply your own file name
+    download $requested_url, '/tmp', 'somefile.txt';
 
 =cut
 
 sub download {
-    return store(@_);
+    my ($uri, $dir, $file) = @_;
+    $dir =~ s/[\\\/]+$//;
+     if (@_ == 3) {
+        get $uri;
+        Scrappy::store($dir . '/' . $file);
+        back;
+    }
+    elsif(@_ == 2) {
+        get $uri;
+        my @chars = ('a'..'z', 'A'..'Z', 0..9);
+        my $filename = self->{Mech}->response->filename;
+           $filename = $chars[rand(@chars)] . $chars[rand(@chars)] .
+                       $chars[rand(@chars)] . $chars[rand(@chars)] .
+                       $chars[rand(@chars)] . $chars[rand(@chars)]
+                       unless $filename;
+        Scrappy::store($dir . '/' . $filename);
+        back;
+    }
+    else {
+        die "To download data from a URI you must supply at least a valid URI " .
+            "and download directory path";
+    }
 }
 
 =method list
 
 The list method is an aesthetically pleasing method of dereferencing an
-arrayref. This method dies if the argument is not an arrayref.
+arrayref. This method no longer dies if the argument is not an arrayref and
+instead an empty list.
 
     foreach my $item (list var->{items}) {
         ...
@@ -600,9 +624,9 @@ arrayref. This method dies if the argument is not an arrayref.
 =cut
 
 sub list {
-    die 'The argument passed to the list method must be an arrayref'
-        if ref($_[0]) ne "ARRAY";
-    return @{$_[0]};
+    #die 'The argument passed to the list method must be an arrayref'
+    #    if ref($_[0]) ne "ARRAY";
+    return ref($_[0]) ne "ARRAY" ? () : @{$_[0]};
 }
 
 =method fst
