@@ -13,8 +13,7 @@ user_agent random_ua 'firefox';
 
 get 'http://search.cpan.org/recent';
 
-# status == 200 is equivalent to loaded
-if (status == 200) {
+if (loaded) {
     var date    => grab '.datecell b';
     var modules => grab '#cpansearch li a', { name => 'TEXT', link => '@href' };
 }

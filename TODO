@@ -3,10 +3,11 @@
 
 - ver 0.6
   -   add config support
-  -   add cookie and session support
   -   allow var merging instead of overwriting via merge keyword
   -   add filter function (drill-down web::scraper utility)
   -   investigate performance
+- ver 0.55
+  x   add cookie and session support
 - ver 0.52
   x   fixed the fst method
 - ver 0.52
