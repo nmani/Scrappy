@@ -6,6 +6,7 @@
   -   allow var merging instead of overwriting via merge keyword
   -   add filter function (drill-down web::scraper utility)
   -   investigate performance
+  -   add logging (console and/or file)
 - ver 0.56
   x   fixed download function not working
   x   automatically generate filename for download
