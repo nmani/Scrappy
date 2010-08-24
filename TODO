@@ -11,8 +11,8 @@
   x   automatically generate filename for download
   x   fixed list function failure
   x   fixed random_ua without arguments warning
-  -   fixed documentation typos
-  -   add functionality for single-select return values
+  x   fixed documentation typos
+  x   add functionality for single-select return values (zoom function)
 - ver 0.55
   x   add cookie and session support
 - ver 0.52

@@ -49,6 +49,8 @@ BEGIN {
         lst
         session
         cookies
+        config
+        zoom
     );
     %EXPORT_TAGS = ( syntax => [ @EXPORT_OK ] );
 }
@@ -76,21 +78,21 @@ Scrappy is an easy (and hopefully fun) way of scraping, spidering, and/or
 harvesting information from web pages. Internally Scrappy uses the awesome
 Web::Scraper and WWW::Mechanize modules so as such Scrappy imports its
 awesomeness. Scrappy is inspired by the fun and easy-to-use Dancer API. Beyond
-being a pretty API for WWW::Mechanize::Plugin::Web::Scraper, Scrappy also has
-the persistant cookie handling, session handling, and more.
+being a pretty API for WWW::Mechanize::Plugin::Web::Scraper, Scrappy also has its
+own featuer-set which makes web scraping easier and more enjoyable.
 
-Scrappy == 'Scraper Happy' or 'Happy Scraper'; If you like you may call it
-Scrapy although Python has a web scraping framework by that name and we don't
-plagiarize Python code here.
+Scrappy (pronounced Scrap+Pee) == 'Scraper Happy' or 'Happy Scraper'; If you
+like you may call it Scrapy (pronounced Scrape+Pee) although Python has a web
+scraping framework by that name and this module is not a port of that one.
 
 =cut
 
 =method init
 
-Builds the scraper application instance.
-This function should be called before issuing any other commands as this function
-creates the application instance all other funciton will use. This function
-returns the current scraper application instance.
+Builds the scraper application instance. This function should be called before
+issuing any other commands as this function creates the application instance all
+other functions will use. This function returns the current scraper application
+instance.
 
     my $scraper = init;
 
@@ -108,7 +110,7 @@ sub init {
 =method self
 
 This method returns the current scraper application instance which can also be
-found in the global class variable $class_Instance.
+found in the package class variable $class_Instance.
 
     init;
     get $requested_url;
@@ -125,7 +127,7 @@ sub self {
 
 =method user_agent
 
-This method sets the user-agent for the current scraper application instance.
+This method gets/sets the user-agent for the current scraper application instance.
 
     init;
     user_agent 'Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US; rv:1.9.2.8) Gecko/20100722 Firefox/3.6.8';
@@ -142,18 +144,19 @@ sub user_agent {
 
 =method var
 
-This method sets a stash (shared) variable or returns the entire stash object.
+This method sets a stash (shared) variable or returns a reference to the entire
+stash object.
 
     var age => 31;
     print var->{age};
-    # 30
+    # 31
     
     my @array = (1..20);
     var integers => @array;
     
+    var->{foo}->{bar} = 'baz';
     
-    # stash variable nesting
-    # ** EXPERIMENTAL - Not Recommended **
+    # stash variable nesting ** depreciated ** not recommended **
     var 'user/profile/name' => 'Mr. Foobar';
     print var->{user}->{profile}->{name};
 
@@ -187,18 +190,19 @@ sub var {
 =method random_ua
 
 This returns a random user-agent string for use with the user_agent method. The
-user-agent header in your request is how inquiring application determine your
-browser and environment. The first argument should be the name of the web browser,
-supported web browsers are any, chrome, ie or explorer, opera, safari, and firfox.
-Obviously using the keyword `any` will select from any available browser. The
-second argument which is optional should be the name of the desired operating
-system, supported operating systems are windows, macintosh, linux. 
+user-agent header in your request is how an inquiring application might determine
+the browser and environment making the request. The first argument should be the
+name of the web browser, supported web browsers are any, chrome, ie or explorer,
+opera, safari, and firfox. Obviously using the keyword `any` will select from
+any available browser. The second argument which is optional should be the name
+of the desired operating system, supported operating systems are windows,
+macintosh, and linux. 
 
     init;
     user_agent random_ua;
     # same as random_ua 'any';
     
-e.g. for a Linux-specific user-agent use the following...
+e.g. for a Linux-specific Google Chrome user-agent use the following...
     
     init;
     user_agent random_ua 'chrome', 'linux';
@@ -279,6 +283,13 @@ the exact same arguments, yada, yada.
         username => 'mrmagoo',
         password => 'foobarbaz'
     };
+    
+    # or more specifically
+    
+    form form_number => 1, fields => {
+        username => 'mrmagoo',
+        password => 'foobarbaz'
+    };
 
 =cut
 
@@ -288,7 +299,7 @@ sub form {
 
 =method get
 
-The get method is a shortcut to the WWW:Mechanize get method. This
+The get method is a shortcut to the WWW::Mechanize get method. This
 method takes a URL or URI and returns an HTTP::Response object.
 
 =cut
@@ -301,7 +312,7 @@ sub get {
 
 =method post
 
-The post method is a shortcut to the WWW:Mechanize post method. This
+The post method is a shortcut to the WWW::Mechanize post method. This
 method takes a URL or URI and a hashref of key/value pairs then returns an
 HTTP::Response object. Alternatively the post object can be used traditionally
 (ugly), and passed additional arguments;
@@ -326,7 +337,7 @@ HTTP::Response object. Alternatively the post object can be used traditionally
             post_form_id_source => 'AsyncRequest'
         };
 
-Note! Our prettier version of the post method use a content-type of
+Note! Our prettier version of the post method uses a content-type of
 application/x-www-form-urlencoded by default, to use multipart/form-data,
 please use the traditional style, sorry.
 
@@ -354,25 +365,35 @@ sub post {
 =method grab
 
 The grab method is a shortcut to the Web::Scraper process method. It take
-the exact same arguments with a little bit of our own added magic.
+the exact same arguments with a little bit of our own added magic, namely you
+can grab and return single-selections and even specify the return values, by
+default the return value of a single-selection is TEXT. Note! Use a hashref
+mapping to return a list of results, this may change in the future.
 
     init;
     get $requested_url;
-    grab '#profile li a';
+    grab '#profile li a'; # single-selection
+    grab '#profile li a', '@href'; # specifically returning href attribute
     
     # meaning you can do cool stuff like...
     var user_name => grab '#profile li a';
     
-    # the traditional use is to provide a selector and mappings ..., e.g.
-    grab '#profile li', { name => 'TEXT', link => '@href' };
+    # the traditional use is to provide a selector and mappings/return values e.g.
+    grab '#profile li a', { name => 'TEXT', link => '@href' };
 
 =cut
 
 sub grab {
     my ($selector, $mapping) = @_;
     if ($mapping) {
-        my $temp = self->scrape( $selector, "data[]", $mapping );
-        return $temp->{data};
+        if ("HASH" eq ref $mapping) {
+            my $temp = self->scrape( $selector, "data[]", $mapping );
+            return $temp->{data};
+        }
+        else {
+            my $temp = self->scrape( $selector, "data[]", { selected => $mapping } );
+            return $temp->{data}[0]->{selected};
+        }
     }
     else {
         my $temp = self->scrape( $selector, "data[]", { everything => 'TEXT' } );
@@ -380,9 +401,64 @@ sub grab {
     }
 }
 
+=method zoom
+
+The zoom method is almost exactly the same as the Scrappy grab method except
+that you specify what data to scrape as opposed to the grab method that parses
+the entire page. This is more of a drill-down utility. Note! Use a hashref
+mapping to return a list of results, this may change in the future.
+
+    init;
+    get $requested_url;
+    
+    var items => grab '#find ul li', { id => '@id', content => 'HTML' };
+    
+    foreach my $el (list var->{items}) {
+        var->{$el->{id}}->{title} => zoom $el->{content}, '.title';
+    }
+    
+    # just a silly example but zoom has many very good uses
+    # it is more of a drill-down utility
+
+=cut
+
+sub zoom {
+    my ($html, $selector, $mapping) = @_;
+    
+    die "The zoom function needs html and a selector at least to function properly"
+        unless @_ >= 2;
+        
+    if ($mapping) {
+        if ("HASH" eq ref $mapping) {
+            my $scraper =
+                WWW::Mechanize::Plugin::Web::Scraper::scraper {
+                    WWW::Mechanize::Plugin::Web::Scraper::process
+                        ($selector, "data[]", $mapping) };
+            my $temp = $scraper->scrape( $html );
+            return $temp->{data};
+        }
+        else {
+            my $scraper =
+                WWW::Mechanize::Plugin::Web::Scraper::scraper {
+                    WWW::Mechanize::Plugin::Web::Scraper::process
+                        ($selector, "data[]", { selected => $mapping }) };
+            my $temp = $scraper->scrape( $html );
+            return $temp->{data}[0]->{selected};
+        }
+    }
+    else {
+        my $scraper =
+                WWW::Mechanize::Plugin::Web::Scraper::scraper {
+                    WWW::Mechanize::Plugin::Web::Scraper::process
+                        ($selector, "data[]", { everything => 'TEXT' }) };
+        my $temp = $scraper->scrape( $html );
+        return $temp->{data}[0]->{everything};
+    }
+}
+
 =method loaded
 
-The loaded method is a shortcut to the WWW:Mechanize success method. This
+The loaded method is a shortcut to the WWW::Mechanize success method. This
 method returns true/false based on whether the last request was successful.
 
     init;
@@ -399,7 +475,7 @@ sub loaded {
 
 =method status
 
-The status method is a shortcut to the WWW:Mechanize status method. This
+The status method is a shortcut to the WWW::Mechanize status method. This
 method returns the 3-digit HTTP status code of the response.
 
     init;
@@ -416,8 +492,8 @@ sub status {
 
 =method reload
 
-The reload method is a shortcut to the WWW:Mechanize reload method. This
-method acts like the reload button in a browser, repeats the current request.
+The reload method is a shortcut to the WWW::Mechanize reload method. This
+method acts like the refresh button in a browser, repeats the current request.
 
 =cut
 
@@ -427,9 +503,9 @@ sub reload {
 
 =method back
 
-The back method is a shortcut to the WWW:Mechanize back method. This
-method is equivalent of hitting the "back" button in a browser, it returns
-the previous response (page), it will not backtrack beyond the first request.
+The back method is a shortcut to the WWW::Mechanize back method. This
+method is the equivalent of hitting the "back" button in a browser, it returns
+the previous page (response), it will not backtrack beyond the first request.
 
 =cut
 
@@ -439,8 +515,8 @@ sub back {
 
 =method page
 
-The page method is a shortcut to the WWW:Mechanize uri method. This
-method returns the URI of the current page.
+The page method is a shortcut to the WWW::Mechanize uri method. This
+method returns the URI of the current page as a URI object.
 
 =cut
 
@@ -450,7 +526,7 @@ sub page {
 
 =method response
 
-The response method is a shortcut to the WWW:Mechanize response method. This
+The response method is a shortcut to the WWW::Mechanize response method. This
 method returns the HTTP::Repsonse object of the current page.
 
 =cut
@@ -461,7 +537,7 @@ sub response {
 
 =method content_type
 
-The content_type method is a shortcut to the WWW:Mechanize content_type method.
+The content_type method is a shortcut to the WWW::Mechanize content_type method.
 This method returns the content_type of the current page.
 
 =cut
@@ -472,8 +548,8 @@ sub content_type {
 
 =method domain
 
-The domain method is a shortcut to the WWW:Mechanize base method.
-This method returns URI of the current page.
+The domain method is a shortcut to the WWW::Mechanize base method.
+This method returns URI host of the current page.
 
 =cut
 
@@ -483,9 +559,9 @@ sub domain {
 
 =method ishtml
 
-The ishtml method is a shortcut to the WWW:Mechanize is_html method.
-This method returns true/false on whether our content is HTML, according to the
-HTTP headers.
+The ishtml method is a shortcut to the WWW::Mechanize is_html method.
+This method returns true/false based on whether our content is HTML, according
+to the HTTP headers.
 
 =cut
 
@@ -495,7 +571,7 @@ sub ishtml {
 
 =method title
 
-The title method is a shortcut to the WWW:Mechanize title method.
+The title method is a shortcut to the WWW::Mechanize title method.
 This method returns the content of the title tag if the current page is HTML,
 otherwise returns undef.
 
@@ -507,7 +583,7 @@ sub title {
 
 =method text
 
-The text method is a shortcut to the WWW:Mechanize content method using
+The text method is a shortcut to the WWW::Mechanize content method using
 the format argument and returns a text representation of the last page having
 all HTML markup stripped.
 
@@ -519,7 +595,7 @@ sub text {
 
 =method html
 
-The html method is a shortcut to the WWW:Mechanize content method. This method
+The html method is a shortcut to the WWW::Mechanize content method. This method
 returns the content of the current page.
 
 =cut
@@ -530,9 +606,9 @@ sub html {
 
 =method data
 
-The data method is a shortcut to the WWW:Mechanize content method. This method
+The data method is a shortcut to the WWW::Mechanize content method. This method
 returns the content of the current page. Additionally this method when passed
-a single argument, updates the content of the current page with that data and
+data, updates the content of the current page with that data and
 returns the modified content.
 
 =cut
@@ -559,7 +635,7 @@ sub www {
 
 =method store
 
-The store method is a shortcut to the WWW:Mechanize save_content method. This
+The store method is a shortcut to the WWW::Mechanize save_content method. This
 method stores the contents of the current page into the specified file. If the
 content-type does not begin with 'text', the content is saved as binary data.
 
@@ -575,9 +651,11 @@ sub store {
 =method download
 
 The download method is passed a URI, a Download Directory Path and a optionally
-a File Path, then it will follow the link and store the requests contents into
+a File Path, then it will follow the link and store the response contents into
 the specified file without leaving the current page. Basically it downloads the
-contents of the request even (especially) when the request pushes a file download.
+contents of the request (especially when the request pushes a file download). If
+a File Path is not specified, Scrappy will attempt to name the file automatically
+resorting to a random 6-charater string only if all else fails.
 
     download $requested_url, '/tmp';
     
@@ -614,8 +692,8 @@ sub download {
 =method list
 
 The list method is an aesthetically pleasing method of dereferencing an
-arrayref. This method no longer dies if the argument is not an arrayref and
-instead an empty list.
+arrayref. This is useful when iterating over a scraped resultset. This method
+no longer dies if the argument is not an arrayref and instead returns an empty list.
 
     foreach my $item (list var->{items}) {
         ...
@@ -660,12 +738,11 @@ sub lst {
 =method session
 
 The session method provides a means for storing important data across executions.
-There is one special session variable `_file` whose name is used to define the
-directory where session files will be stored. This variable is automatically set
-upon initialization to ./$scriptname_session.yml under the current working
-directory, please make sure it exists and is writable. Yes, as I am sure you've
-deduced, the session file will be stored as YAML code. Cookies are automatically
-stored and retrieved in your session file automatically.
+There is one special session variable `_file` whose value is used to define the
+file where session data will be stored. Please make sure the session file exists
+and is writable. As I am sure you've deduced from the example, the session file
+will be stored as YAML code. Cookies are automatically stored in and retrieved
+from your session file automatically.
 
     init;
     session _file => '/tmp/foo_session.yml';
@@ -733,11 +810,22 @@ sub session {
     }
 }
 
+=method config
+
+The config method is an alias to the Scrappy session method for readability.
+
+=cut
+
+sub config {
+    return session @_;
+}
+
 =method cookies
 
-The cookies method is a shortcut to the automatically generated WWW:Mechanize
+The cookies method is a shortcut to the automatically generated WWW::Mechanize
 cookie handler. This method returns an HTTP::Cookie object. Setting this as
-undefined will prevent cookies from being stored and subsequently read.
+undefined using the _undef keyword will prevent cookies from being stored and
+subsequently read.
 
     init;
     get $requested_url;
