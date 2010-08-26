@@ -1,10 +1,13 @@
 # Scrappy - Simple Stupid Spider base on Web Scraper inspired by Dancer
 # TODO
 
+- ver 0.65
+  -   add plugin support
+  -   whois plugin (imports a function when passed a link returns whois info)
+  -   howto and best practices docs
 - ver 0.6
-  -   add config support
   -   allow var merging instead of overwriting via merge keyword
-  -   add filter function (drill-down web::scraper utility)
+  x   add filter function (drill-down web::scraper utility) - zoom function
   -   investigate performance
   -   add logging (console and/or file)
 - ver 0.56
