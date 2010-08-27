@@ -10,6 +10,8 @@
   x   add filter function (drill-down web::scraper utility) - zoom function
   -   investigate performance
   -   add logging (console and/or file)
+- ver 0.58
+  -   add proxy support
 - ver 0.56
   x   fixed download function not working
   x   automatically generate filename for download
