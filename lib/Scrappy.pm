@@ -892,6 +892,22 @@ so that all subsequent requests will not use a proxy.
     init;
     proxy 'http', 'ftp', 'http://proxy.example.com:8000/';
     get $requested_url;
+    
+    # best practice
+    
+    use Tiny::Try;
+    
+    init;
+    proxy 'http', 'ftp', 'http://proxy.example.com:8000/';
+    
+    try {
+        get $requested_url
+    };
+    
+Note! When using a proxy to perform requests, be aware that if they fail your
+program will die unless you wrap yoru code in an eval statement or use a try/catch
+module. In the example above we use Tiny::Try to trap an errors that might occur
+when using a proxy.
 
 =cut
 
