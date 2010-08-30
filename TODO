@@ -10,6 +10,8 @@
   x   add filter function (drill-down web::scraper utility) - zoom function
   -   investigate performance
   -   add logging (console and/or file)
+- ver 0.59
+  x   add pausing support
 - ver 0.58
   x   add proxy support
 - ver 0.56
