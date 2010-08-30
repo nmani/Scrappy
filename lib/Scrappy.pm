@@ -10,7 +10,7 @@ use File::ShareDir ':ALL';
 use File::Slurp;
 use YAML::Syck;
 
-our $class_Instance = undef;
+our $class_Instance             = undef;
     $YAML::Syck::ImplicitTyping = 1;
 
 BEGIN {
@@ -52,6 +52,7 @@ BEGIN {
         config
         zoom
         proxy
+        pause
     );
     %EXPORT_TAGS = ( syntax => [ @EXPORT_OK ] );
 }
@@ -100,11 +101,13 @@ instance.
 =cut
 
 sub init {
-    $class_Instance = WWW::Mechanize::Pluggable->new();
+    $class_Instance = WWW::Mechanize::Pluggable->new(@_);
     die 'Could not create a scraper application instance, please make sure you ' .
         'have install Scrappy and its prerequesites properly.'
         unless defined $class_Instance;
-    $class_Instance->{Scrappy} = { stash => {} };
+    
+    $class_Instance->{Scrappy}       = { stash => {} };
+    $class_Instance->{Mech}->{pause} = 0;
     return $class_Instance;
 }
 
@@ -295,7 +298,9 @@ the exact same arguments, yada, yada.
 =cut
 
 sub form {
-    return self->submit_form(@_);
+    my $response = self->submit_form(@_);
+    sleep pause();
+    return $response;
 }
 
 =method get
@@ -308,6 +313,7 @@ method takes a URL or URI and returns an HTTP::Response object.
 sub get {
     my $request = self->get(@_);
     self->{Mech}->{cookie_jar}->scan(\&_cookies_to_session);
+    sleep pause();
     return $request;
 }
 
@@ -354,11 +360,13 @@ sub post {
             'Content'      => $params
         );
         self->{Mech}->{cookie_jar}->scan(\&_cookies_to_session);
+        sleep pause();
         return $request;
     }
     else {
         my $request = self->post(@_);
         self->{Mech}->{cookie_jar}->scan(\&_cookies_to_session);
+        sleep pause();
         return $request;
     }
 }
@@ -499,7 +507,9 @@ method acts like the refresh button in a browser, repeats the current request.
 =cut
 
 sub reload {
-    return self->reload;
+    my $response = self->reload;
+    sleep pause();
+    return $response;
 }
 
 =method back
@@ -511,7 +521,9 @@ the previous page (response), it will not backtrack beyond the first request.
 =cut
 
 sub back {
-    return self->back;
+    my $response = self->back;
+    sleep pause();
+    return $response;
 }
 
 =method page
@@ -915,6 +927,64 @@ sub proxy {
     my $proxy    = pop @_;
     my @protocol = @_;
     return self->proxy([@protocol], $proxy);
+}
+
+=method pause
+
+The pause method is an adaptation of the WWW::Mechanize::Sleep module. This method
+sets breaks between your requests in an attempt to simulate human interaction.
+
+    init;
+    pause 20;
+    
+    get $request_1;
+    get $request_2;
+    get $request_3;
+    
+The will be a break between each request made, get, post, request, etc., You can
+also specify a range to have the pause method select from at random...
+
+    init;
+    pause 5,20;
+    
+    get $request_1;
+    get $request_2;
+    
+    # reset/turn it off
+    pause 0;
+    
+    print "I slept for ", (pause), " seconds";
+    
+Note! The download method is exempt from any automatic pausing, to pause after a
+download one could obviously...
+
+    download $requested_url, '/tmp';
+    sleep pause();
+
+=cut
+
+sub pause {
+    if ($_[0]) {
+        if ($_[1]) {
+            my @range = (($_[0] < $_[1] ? $_[0] : 0)..$_[1]);
+            self->{Mech}->{pause_range} = [$_[0], $_[1]];
+            self->{Mech}->{pause} = $range[rand(@range)];
+        }
+        else {
+            self->{Mech}->{pause} = $_[0];
+        }
+    }
+    else {
+        my $interval = self->{Mech}->{pause};
+        
+        # select the next random pause value from the range
+        if (defined self->{Mech}->{pause_range}) {
+            my @range = list self->{Mech}->{pause_range};
+            pause(@range) if @range == 2;
+        }
+        
+        return $interval;
+    }
 }
 
 1;
