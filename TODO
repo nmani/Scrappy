@@ -1,4 +1,4 @@
-# Scrappy - Simple Stupid Spider base on Web Scraper inspired by Dancer
+# Scrappy - All Powerful Web Harvester, Spider, Scraper fully automated
 # TODO
 
 - ver 0.65
@@ -6,7 +6,8 @@
   -   whois plugin (imports a function when passed a link returns whois info)
   -   howto and best practices docs
 - ver 0.6
-  -   allow var merging instead of overwriting via merge keyword
+  x   merge scrappy-doo, allowing auto web crawling
+  x   allow var merging instead of overwriting via merge keyword
   x   add filter function (drill-down web::scraper utility) - zoom function
   -   investigate performance
   -   add logging (console and/or file)

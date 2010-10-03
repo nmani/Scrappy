@@ -1,4 +1,4 @@
-# ABSTRACT: Simple Stupid Spider base on Web::Scraper inspired by Dancer
+# ABSTRACT: All Powerful Web Harvester, Spider, Scraper fully automated
 
 use strict;
 use warnings;
@@ -9,10 +9,13 @@ use WWW::Mechanize::Pluggable;
 use File::ShareDir ':ALL';
 use File::Slurp;
 use YAML::Syck;
+use Array::Unique;
+use Try::Tiny;
 
+our $class_History              = [];
 our $class_Instance             = undef;
     $YAML::Syck::ImplicitTyping = 1;
-
+    
 BEGIN {
     use Exporter();
     use vars qw( @ISA %EXPORT_TAGS @EXPORT_OK );
@@ -53,16 +56,34 @@ BEGIN {
         zoom
         proxy
         pause
+        crawl
+        queue
+        cursor
+        denied
+        history
     );
     %EXPORT_TAGS = ( syntax => [ @EXPORT_OK ] );
 }
 
 =head1 SYNOPSIS
 
+Crawl an entire website or more with three lines of code.
+
     #!/usr/bin/perl
     use Scrappy qw/:syntax/;
         
-    init;
+    crawl 'http://somewebsite.com' {
+        'a' => sub { queue shift->href },
+        '/*' => {
+            # do something
+        }
+    };
+
+Spider, Scrape or Harvest data from websites like never before, with ease.
+
+    #!/usr/bin/perl
+    use Scrappy qw/:syntax/;
+        
     user_agent random_ua;
     
     get 'http://search.cpan.org/recent';
@@ -73,6 +94,16 @@ BEGIN {
     }
     
     print $_->{name}, "\n" for list var->{modules};
+    
+Trace page fetches during crawling by using the 'Scrappy_Trace' environment variable, e.g. ...
+
+    $ENV{Scrappy_Trace} = 1;
+    crawl 'http://somewebsite.com' {
+        'a' => sub { queue shift->href },
+        '/*' => {
+            # do something
+        }
+    };
   
 =head1 DESCRIPTION
 
@@ -109,6 +140,19 @@ sub init {
     $class_Instance->{Scrappy}       = { stash => {} };
     $class_Instance->{Mech}->{pause} = 0;
     return $class_Instance;
+}
+
+=method reset
+
+The reset method is an alias to the init method. This function should be called before
+issuing any other commands as this function creates the application instance all
+other functions will use. This function returns the current scraper application
+instance.
+
+=cut
+
+sub reset {
+    return init(@_);
 }
 
 =method self
@@ -312,6 +356,7 @@ method takes a URL or URI and returns an HTTP::Response object.
 
 sub get {
     my $request = self->get(@_);
+    push @{$class_History}, @_;
     self->{Mech}->{cookie_jar}->scan(\&_cookies_to_session);
     sleep pause();
     return $request;
@@ -987,4 +1032,276 @@ sub pause {
     }
 }
 
-1;
+our @_queue = ();
+tie @_queue, 'Array::Unique';
+our $_cursor = 0;
+
+=method cursor
+
+The cursor method is used internally by the crawl method to determine what
+pages in the queue should be fetched next after the completion of the current
+fetch. This method returns the position of the cursor in the queue.
+
+=cut
+
+sub cursor {
+    $_cursor = $_[0] if $_[0];
+    return $_cursor;
+}
+
+=method queue
+
+The queue method is used to add valid URIs to the page fetching queue used by
+the crawl method internally, or to return the list of added URIs in the order
+received/input.
+
+    queue $new_url;
+    my @urls = queue;
+
+=cut
+
+sub queue {
+    return @_ ? push @_queue, @_ : @_queue;
+}
+
+=method crawl
+
+The crawl method is designed to automatically and systematically crawl, spider,
+or fetch webpages and perform actions on selected elements on each page.
+
+    crawl $starting_url, {
+        'a' => sub {
+            # find all links and add them to the queue to be crawled
+            queue shift->href;
+        },
+        '/*' => sub {
+            # /* simply matches the root node, same as using 'body' in
+            # html page context, maybe do soemthing with shift->text or shift->html
+        },
+        'img' => sub {
+            # print all image URLs
+            print shift->src, "\n"
+        }
+    };
+
+=cut
+
+sub crawl {
+    my ($url, $actions) = @_;
+    
+    $_queue[cursor()] = $url;
+    
+    doPage:
+    
+    try {
+        get $_queue[cursor()];
+    }
+    catch {
+        warn "problem fetching " . $_queue[cursor()];
+        goto nextPage;
+    };
+    
+    try {
+        loaded;
+    }
+    catch {
+        warn "problem loading " . $_queue[cursor()];
+        goto nextPage;
+    };
+    
+    warn "fetching page " . $_queue[cursor()] if $ENV{Scrappy_Trace};
+    
+    # process actions
+    if ("hash" eq lc ref $actions) {
+        while (my($selector, $function) = each(%{$actions})) {
+            my $findings = grab $selector, tattr();
+            foreach (@{$findings}) {
+                $function->(element($_));
+            }
+        }
+    }
+    
+    nextPage:
+    goto doPage if $_queue[++$_cursor];
+}
+
+sub element {
+    my $element = shift;
+    foreach my $attr(keys %{$element}) {
+        {
+            no warnings 'redefine';
+            no strict 'refs';
+            *{"Scrappy::Element::$attr"} = sub {
+                return shift->{$attr};
+            }
+        }
+    }
+    bless $element, 'Scrappy::Element';
+}
+
+sub tattr {
+    return {
+        'abbr'           => '@abbr',
+        'accept-charset' => '@accept',
+        'accept'         => '@accept',
+        'accesskey'      => '@accesskey',
+        'action'         => '@action',
+        'align'          => '@align',
+        'alink'          => '@alink',
+        'alt'            => '@alt',
+        'archive'        => '@archive',
+        'axis'           => '@axis',
+        'background'     => '@background',
+        'bgcolor'        => '@bgcolor',
+        'border'         => '@border',
+        'cellpadding'    => '@cellpadding',
+        'cellspacing'    => '@cellspacing',
+        'char'           => '@char',
+        'charoff'        => '@charoff',
+        'charset'        => '@charset',
+        'checked'        => '@checked',
+        'cite'           => '@cite',
+        'class'          => '@class',
+        'classid'        => '@classid',
+        'clear'          => '@clear',
+        'code'           => '@code',
+        'codebase'       => '@codebase',
+        'codetype'       => '@codetype',
+        'color'          => '@color',
+        'cols'           => '@cols',
+        'colspan'        => '@colspan',
+        'compact'        => '@compact',
+        'content'        => '@content',
+        'coords'         => '@coords',
+        'data'           => '@data',
+        'datetime'       => '@datetime',
+        'declare'        => '@declare',
+        'defer'          => '@defer',
+        'dir'            => '@dir',
+        'disabled'       => '@disabled',
+        'enctype'        => '@enctype',
+        'face'           => '@face',
+        'for'            => '@for',
+        'frame'          => '@frame',
+        'frameborder'    => '@frameborder',
+        'headers'        => '@headers',
+        'height'         => '@height',
+        'href'           => '@href',
+        'hreflang'       => '@hreflang',
+        'hspace'         => '@hspace',
+        'http'           => '@http-equiv',
+        'id'             => '@id',
+        'ismap'          => '@ismap',
+        'label'          => '@label',
+        'lang'           => '@lang',
+        'language'       => '@language',
+        'link'           => '@link',
+        'longdesc'       => '@longdesc',
+        'marginheight'   => '@marginheight',
+        'marginwidth'    => '@marginwidth',
+        'maxlength'      => '@maxlength',
+        'media'          => '@media',
+        'method'         => '@method',
+        'multiple'       => '@multiple',
+        'name'           => '@name',
+        'nohref'         => '@nohref',
+        'noresize'       => '@noresize',
+        'noshade'        => '@noshade',
+        'nowrap'         => '@nowrap',
+        'object'         => '@object',
+        'onblur'         => '@onblur',
+        'onchange'       => '@onchange',
+        'onclick'        => '@onclick',
+        'ondblclick'     => '@ondblclick',
+        'onfocus'        => '@onfocus',
+        'onkeydown'      => '@onkeydown',
+        'onkeypress'     => '@onkeypress',
+        'onkeyup'        => '@onkeyup',
+        'onload'         => '@onload',
+        'onmousedown'    => '@onmousedown',
+        'onmousemove'    => '@onmousemove',
+        'onmouseout'     => '@onmouseout',
+        'onmouseover'    => '@onmouseover',
+        'onmouseup'      => '@onmouseup',
+        'onreset'        => '@onreset',
+        'onselect'       => '@onselect',
+        'onsubmit'       => '@onsubmit',
+        'onunload'       => '@onunload',
+        'profile'        => '@profile',
+        'prompt'         => '@prompt',
+        'readonly'       => '@readonly',
+        'rel'            => '@rel',
+        'rev'            => '@rev',
+        'rows'           => '@rows',
+        'rowspan'        => '@rowspan',
+        'rules'          => '@rules',
+        'scheme'         => '@scheme',
+        'scope'          => '@scope',
+        'scrolling'      => '@scrolling',
+        'selected'       => '@selected',
+        'shape'          => '@shape',
+        'size'           => '@size',
+        'span'           => '@span',
+        'src'            => '@src',
+        'standby'        => '@standby',
+        'start'          => '@start',
+        'style'          => '@style',
+        'summary'        => '@summary',
+        'tabindex'       => '@tabindex',
+        'target'         => '@target',
+        'text'           => '@text',
+        'title'          => '@title',
+        'type'           => '@type',
+        'usemap'         => '@usemap',
+        'valign'         => '@valign',
+        'value'          => '@value',
+        'valuetype'      => '@valuetype',
+        'version'        => '@version',
+        'vlink'          => '@vlink',
+        'vspace'         => '@vspace',
+        'width'          => '@width',
+        'text'           => 'TEXT',
+        'html'           => 'HTML',
+    };
+    # need xml and json support maybe?
+}
+
+=method history
+
+The history method returns a list of visted pages.
+
+    get $url_a;
+    get $url_b;
+    get $url_c;
+
+    print history;
+
+=cut
+
+sub history {
+    return @{$class_History};
+}
+
+=method denied
+
+The denied method is a simple shortcut to determine if the page you
+requested got loaded or redirected. This method is very useful on systems
+that require authentication and redirect if not authorized. This function
+return boolean, 1 if the current page doesn't match the requested page.
+
+    get $url_to_dashboard;
+    if (denied) {
+        # do login, again
+    }
+    else {
+        # resume ...
+    }
+
+=cut
+
+sub denied {
+    my ($last) = reverse history;
+    return 1 if (page ne $last);
+}
+
+init;

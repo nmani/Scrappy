@@ -1,9 +1,8 @@
 #!/usr/bin/perl
-# Scrappy - Simple Stupid Spider base on Web::Scraper inspired by Dancer
+# Scrappy - This aint your father's web spider :}
 
 use Scrappy qw/:syntax/;
 
-init;
 user_agent random_ua;
 session _file => './session.yml';
 
@@ -18,29 +17,25 @@ print var->{date}, "\n" ;
 print $_->{name} , "\n" for list var->{modules};
 
 
-__THEEND__
-
-As per and IRC conversation...
-
-[17:43] <Getty> so scrappy is special grabber magic? :)
-[17:43] <awnstudio> ummmm, ...
-[17:44] <awnstudio> Scrappy unifies web scraping concepts and provides a simple
-sugarry API using WWW::Mechanize and Web::Scraper
-
 --------------------------------------------------------------------
 
 #!/usr/bin/perl
-# Scrappy::Doo - Simple Stupid Web Scraping Automation in Seconds
+# Scrappy - All Powerful Web Harvester, Spider, Scraper fully automated
 
-use Scrappy::Doo;
-our @emails = ();
+use Scrappy qw/:syntax/;
+    
+user_agent random_ua;
+var url => 'http://search.cpan.org/author/';
 
-start $url, {
-    'a' => sub { queue shift->{href} },
-    'body' => sub {
-        push @emails, grep { /[\w-]+(?:\.[\w-]+)*@(?:[\w-]+\.)+[a-zA-Z]{2,7}/ } split /\s/, shift->{text}
+crawl var->{url}, {
+    'a' => sub {
+        my $href = shift->href;
+        queue $href if
+        $href =~ var->{url} ||
+        $href =~ /http\:\/\/search\.cpan\.org\/\~/;
+    },
+    '/html/body/div[2]/table/tr[2]/td[2]/a' => sub {
+        print page(), '=', shift->href, "\n" if
+        page =~ /http\:\/\/search\.cpan\.org\/\~/;
     }
 };
-
-# be nice to be able to do
-# thread 4, start $url, { ... }

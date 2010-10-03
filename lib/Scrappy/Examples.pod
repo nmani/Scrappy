@@ -21,45 +21,45 @@ Scrappy (pronounced Scrap+Pee) == 'Scraper Happy' or 'Happy Scraper'; If you
 like you may call it Scrapy (pronounced Scrape+Pee) although Python has a web
 scraping framework by that name and this module is not a port of that one.
 
-=head1 BASIC SCRAPPY USAGE
+=head1 BASIC USAGE
 
     #!/usr/bin/perl
     use Scrappy qw/:syntax/;
         
-    # always initialize a new scrappy instance first
-    init;
-    
-    # pick a user-agent, any user-agent
-    user_agent random_ua;
-    
     # get page from URL
     get 'http://search.cpan.org/recent';
     
     if (loaded) {
-        var date    => grab '.datecell b';
         var modules => grab '#cpansearch li a', { name => 'TEXT', link => '@href' };
     }
     
     # the list function deferences, list == @{...}
     print $_->{name}, "\n" for list var->{modules};
 
-=head1 EXAMPLES
+=head1 ADVANCED USAGE
 
 =head2 Scrape From A Website
 
-    init;
     get $website_url;
-    var foo => grab '...' => { ... };
+    var foo => grab 'a.more_info', 'ALL';
 
 =head2 Scrape From A File
 
     use URI;
-    
-    init;
     get URI->new($filename);
-    var foo => grab '...' => { ... };
+    var foo => grab 'div', 'ALL';
+    
+=head2 Scrape An Entire Website
 
-=head1 EXAMPLES
+    crawl $starting_url, {
+        'a' => sub { queue shift->href },
+        '/*' => sub {
+            # /* matches the root node, you can also use body, div.container, etc
+            # do something
+        }
+    };
+
+=head1 DISCLAIMER
 
 This documentation is incomplete, obviously. For help and support find alnewkirk
 or alnewkirk|com on IRC, or find this project on GitHub. If all else fails, write
