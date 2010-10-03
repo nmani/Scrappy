@@ -10,6 +10,8 @@
   x   add filter function (drill-down web::scraper utility) - zoom function
   -   investigate performance
   -   add logging (console and/or file)
+  -   use HTML::Zoom (transform) to update html page contents
+  -   add serializer support (json, yaml, xml)
 - ver 0.59
   x   add pausing support
 - ver 0.58

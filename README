@@ -1,6 +1,5 @@
-# Scrappy - Simple Stupid Spider base on Web::Scraper inspired by Dancer
-
 #!/usr/bin/perl
+# Scrappy - Simple Stupid Spider base on Web::Scraper inspired by Dancer
 
 use Scrappy qw/:syntax/;
 
@@ -17,3 +16,31 @@ if (loaded) {
 
 print var->{date}, "\n" ;
 print $_->{name} , "\n" for list var->{modules};
+
+
+__THEEND__
+
+As per and IRC conversation...
+
+[17:43] <Getty> so scrappy is special grabber magic? :)
+[17:43] <awnstudio> ummmm, ...
+[17:44] <awnstudio> Scrappy unifies web scraping concepts and provides a simple
+sugarry API using WWW::Mechanize and Web::Scraper
+
+--------------------------------------------------------------------
+
+#!/usr/bin/perl
+# Scrappy::Doo - Simple Stupid Web Scraping Automation in Seconds
+
+use Scrappy::Doo;
+our @emails = ();
+
+start $url, {
+    'a' => sub { queue shift->{href} },
+    'body' => sub {
+        push @emails, grep { /[\w-]+(?:\.[\w-]+)*@(?:[\w-]+\.)+[a-zA-Z]{2,7}/ } split /\s/, shift->{text}
+    }
+};
+
+# be nice to be able to do
+# thread 4, start $url, { ... }
