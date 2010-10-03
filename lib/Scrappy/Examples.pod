@@ -1,12 +1,5 @@
-=pod
-
-=head1 NAME
-
-Scrappy::Examples - How Do I Command The All Powerful Web Scraper Scrappy?
-
-=head1 VERSION
-
-version 0.1
+package Scrappy::Examples;
+# ABSTRACT: How Do I Command The All Powerful Web Scraper Scrappy?
 
 =head1 WHAT IS SCRAPPY
 
