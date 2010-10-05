@@ -167,7 +167,7 @@ found in the package class variable $class_Instance.
 =cut
 
 sub self {
-    die 'No scraper application instance found, please use the `init` method' .
+    die 'No scraper application instance found, please use the `init` method ' .
         'before calling any other functions from your package or script.'
         unless defined $class_Instance;
     return $class_Instance;
@@ -426,14 +426,32 @@ mapping to return a list of results, this may change in the future.
 
     init;
     get $requested_url;
-    grab '#profile li a'; # single-selection
-    grab '#profile li a', '@href'; # specifically returning href attribute
+    grab '#profile li a'; # return the inner text of the first encounter
+    grab '#profile li a', '@href'; # specifically returning href attribute of the first encounter
     
     # meaning you can do cool stuff like...
     var user_name => grab '#profile li a';
     
     # the traditional use is to provide a selector and mappings/return values e.g.
     grab '#profile li a', { name => 'TEXT', link => '@href' };
+    
+    # feeling lazy, let Scrappy auto-discover the attributes for you
+    grab '#profile li a', ':all';
+    
+    # Note! using { mappings } or ':all' will return an arrayref and should be used when
+    # trying to select multiple records.
+    # Also Note! elements are returned as objects with accessors making it possible
+    # to do the following....
+    
+    my $label = grab '#profile li a', ':all';
+    print $label->href;
+    
+    grab 'a'; # returns inner text of the first match
+    grab 'a', 'html'; # returns inner html of the first match
+    grab 'a', '@href'; # returns the href attribute of the first match
+    
+    grab 'a', ':all'; # returns an arrayref with all attributes including text, and html
+    grab 'a', { key => 'attr' }; # returns an arrayref with the specified attributes
 
 =cut
 
@@ -442,9 +460,13 @@ sub grab {
     if ($mapping) {
         if ("HASH" eq ref $mapping) {
             my $temp = self->scrape( $selector, "data[]", $mapping );
-            return $temp->{data};
+            return element($temp->{data});
         }
         else {
+            if (":all" eq lc $mapping) {
+                my $temp = self->scrape( $selector, "data[]", tattr() );
+                return element($temp->{data});
+            }
             my $temp = self->scrape( $selector, "data[]", { selected => $mapping } );
             return $temp->{data}[0]->{selected};
         }
@@ -484,12 +506,22 @@ sub zoom {
         
     if ($mapping) {
         if ("HASH" eq ref $mapping) {
+            
+            if (":all" eq lc $mapping) {
+                 my $scraper =
+                    WWW::Mechanize::Plugin::Web::Scraper::scraper {
+                        WWW::Mechanize::Plugin::Web::Scraper::process
+                            ($selector, "data[]", tattr()) };
+                my $temp = $scraper->scrape( $html );
+                return element($temp->{data});
+            }
+            
             my $scraper =
                 WWW::Mechanize::Plugin::Web::Scraper::scraper {
                     WWW::Mechanize::Plugin::Web::Scraper::process
                         ($selector, "data[]", $mapping) };
             my $temp = $scraper->scrape( $html );
-            return $temp->{data};
+            return element($temp->{data});
         }
         else {
             my $scraper =
@@ -1087,7 +1119,14 @@ or fetch webpages and perform actions on selected elements on each page.
 =cut
 
 sub crawl {
-    my ($url, $actions) = @_;
+    my @array = @_;
+    
+    my $actions = pop @array;
+    my $url     = shift @array;
+    
+    die 'crawler need a URL and actions to proceed' unless $url && $actions;
+    
+    queue $url, @array if @array;
     
     $_queue[cursor()] = $url;
     
@@ -1114,9 +1153,11 @@ sub crawl {
     # process actions
     if ("hash" eq lc ref $actions) {
         while (my($selector, $function) = each(%{$actions})) {
-            my $findings = grab $selector, tattr();
-            foreach (@{$findings}) {
-                $function->(element($_));
+            my $findings = grab $selector, ':all';
+            if ("array" eq lc ref $findings) {
+                foreach (@{$findings}) {
+                    $function->($_);
+                }
             }
         }
     }
@@ -1126,17 +1167,23 @@ sub crawl {
 }
 
 sub element {
-    my $element = shift;
-    foreach my $attr(keys %{$element}) {
-        {
-            no warnings 'redefine';
-            no strict 'refs';
-            *{"Scrappy::Element::$attr"} = sub {
-                return shift->{$attr};
+    my $object = shift;
+       $object = [$object] unless "ARRAY" eq ref $object;
+       
+    foreach my $element (@{$object}) {
+        foreach my $attr(keys %{$element}) {
+            {
+                no warnings 'redefine';
+                no strict 'refs';
+                *{"Scrappy::Element::$attr"} = sub {
+                    return shift->{$attr};
+                }
             }
         }
+        bless $element, 'Scrappy::Element';
     }
-    bless $element, 'Scrappy::Element';
+    
+    return @{$object} == 1 ? $object->[0] : $object;
 }
 
 sub tattr {
