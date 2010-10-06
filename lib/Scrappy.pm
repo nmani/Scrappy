@@ -1159,6 +1159,9 @@ sub crawl {
                     $function->($_);
                 }
             }
+            else {
+                $function->($findings);
+            }
         }
     }
     
