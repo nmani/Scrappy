@@ -1,5 +1,6 @@
-package Scrappy::Examples;
 # ABSTRACT: How Do I Command The All Powerful Web Scraper Scrappy?
+
+package Scrappy::Manual;
 
 =head1 WHAT IS SCRAPPY
 

@@ -4,16 +4,19 @@ use strict;
 use warnings;
 
 package Scrappy;
+
 use FindBin;
-use WWW::Mechanize::Pluggable;
+use WWW::Mechanize;
+use Web::Scraper;
 use File::ShareDir ':ALL';
 use File::Slurp;
 use YAML::Syck;
 use Array::Unique;
 use Try::Tiny;
+use URI;
 
 our $class_History              = [];
-our $class_Instance             = undef;
+our $class_Instance             = {};
     $YAML::Syck::ImplicitTyping = 1;
     
 BEGIN {
@@ -61,115 +64,107 @@ BEGIN {
         cursor
         denied
         history
+        reinit
     );
     %EXPORT_TAGS = ( syntax => [ @EXPORT_OK ] );
 }
 
 =head1 SYNOPSIS
 
-Crawl an entire website or more with three lines of code.
+Scrappy does it all, any way you like. Object-Oriented or DSL (Domain-Specific).
+Lets look at a simple scraper in OO context.
+
+    #!/usr/bin/perl
+    use Scrappy;
+
+    my $spidy = Scrappy->new;
+    
+    $spidy->crawl('http://search.cpan.org/recent', {
+        '#cpansearch li a' => sub {
+            print shift->text, "\n";
+        }
+    });
+
+Now lets run the same operation again in DSL context.
 
     #!/usr/bin/perl
     use Scrappy qw/:syntax/;
-        
-    crawl 'http://somewebsite.com' {
-        'a' => sub { queue shift->href },
-        '/*' => {
-            # do something
+    
+    crawl 'http://search.cpan.org/recent', {
+        '#cpansearch li a' => sub {
+            print shift->text, "\n";
         }
     };
 
-Spider, Scrape or Harvest data from websites like never before, with ease.
-
-    #!/usr/bin/perl
-    use Scrappy qw/:syntax/;
-        
-    user_agent random_ua;
-    
-    get 'http://search.cpan.org/recent';
-    
-    if (loaded) {
-        var date    => grab '.datecell b';
-        var modules => grab '#cpansearch li a', { name => 'TEXT', link => '@href' };
-    }
-    
-    print $_->{name}, "\n" for list var->{modules};
-    
-Trace page fetches during crawling by using the 'Scrappy_Trace' environment variable, e.g. ...
-
-    $ENV{Scrappy_Trace} = 1;
-    crawl 'http://somewebsite.com' {
-        'a' => sub { queue shift->href },
-        '/*' => {
-            # do something
-        }
-    };
-  
 =head1 DESCRIPTION
 
 Scrappy is an easy (and hopefully fun) way of scraping, spidering, and/or
-harvesting information from web pages. Internally Scrappy uses the awesome
-Web::Scraper and WWW::Mechanize modules so as such Scrappy imports its
-awesomeness. Scrappy is inspired by the fun and easy-to-use Dancer API. Beyond
-being a pretty API for WWW::Mechanize::Plugin::Web::Scraper, Scrappy also has its
-own featuer-set which makes web scraping easier and more enjoyable.
+harvesting information from web pages, web services, and more. Scrappy is a
+feature rich, flexible, intelligent web automation tool.
 
 Scrappy (pronounced Scrap+Pee) == 'Scraper Happy' or 'Happy Scraper'; If you
 like you may call it Scrapy (pronounced Scrape+Pee) although Python has a web
 scraping framework by that name and this module is not a port of that one.
 
+Scrappy is approaching version 1.0, taking on critical mass :}
+
 =cut
 
 =method init
 
-Builds the scraper application instance. This function should be called before
-issuing any other commands as this function creates the application instance all
-other functions will use. This function returns the current scraper application
-instance.
+Builds the scraper application instance. This function is called automatically
+in DSL context and is otherwise irrelevent. This function creates the application
+instance all other functions will use in DSL context. This function returns the
+current scraper application instance.
 
     my $scraper = init;
 
 =cut
 
 sub init {
-    $class_Instance = WWW::Mechanize::Pluggable->new(@_);
-    die 'Could not create a scraper application instance, please make sure you ' .
-        'have install Scrappy and its prerequesites properly.'
-        unless defined $class_Instance;
+    bless $class_Instance, 'Scrappy';
     
-    $class_Instance->{Scrappy}       = { stash => {} };
+    $class_Instance->{Prop}          = { stash => {} };
+    $class_Instance->{Mech}          = WWW::Mechanize->new(@_);
     $class_Instance->{Mech}->{pause} = 0;
+    
     return $class_Instance;
 }
 
-=method reset
+=method reinit
 
-The reset method is an alias to the init method. This function should be called before
-issuing any other commands as this function creates the application instance all
-other functions will use. This function returns the current scraper application
-instance.
+The reinit method is an alias to the init method. This function should be called
+in DSL context when a new scraper application instance in desired. This function
+will returns the new scraper application instance. Obviously in OO context, one
+would simply use Scrappy->new to create a new instance.
+
+    my $new = reinit;
 
 =cut
 
-sub reset {
+sub reinit {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    $class_Instance = {};
     return init(@_);
 }
 
 =method self
 
 This method returns the current scraper application instance which can also be
-found in the package class variable $class_Instance.
+found in the package class variable $class_Instance. This method has no pratical
+purpose in OO context and is made available to return the current scraper application
+instance in DSL context only.
 
-    init;
-    get $requested_url;
-    my $scraper = self;
+    my $self = self;
 
 =cut
 
 sub self {
-    die 'No scraper application instance found, please use the `init` method ' .
-        'before calling any other functions from your package or script.'
-        unless defined $class_Instance;
+    # if init() has never been called, try if once
+    init() unless keys %{$class_Instance};
+    die 'Could not create a scraper application instance, please make sure you ' .
+        'have installed Scrappy and its prerequesites properly.'
+        unless keys %{$class_Instance};
     return $class_Instance;
 }
 
@@ -177,14 +172,14 @@ sub self {
 
 This method gets/sets the user-agent for the current scraper application instance.
 
-    init;
-    user_agent 'Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US; rv:1.9.2.8) Gecko/20100722 Firefox/3.6.8';
+    user_agent 'Mozilla/5.0 (Windows; U; Windows NT ...';
 
 =cut
 
 sub user_agent {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     my ($requested_user_agent) = shift;
-    self->add_header("User-Agent" => $requested_user_agent)
+    self->{Mech}->add_header("User-Agent" => $requested_user_agent)
         if defined $requested_user_agent;
     return $requested_user_agent ?
         $requested_user_agent : self->{Mech}->{headers}->{'User-Agent'};
@@ -197,27 +192,25 @@ stash object.
 
     var age => 31;
     print var->{age};
-    # 31
     
     my @array = (1..20);
     var integers => @array;
     
-    var->{foo}->{bar} = 'baz';
-    
-    # stash variable nesting ** depreciated ** not recommended **
-    var 'user/profile/name' => 'Mr. Foobar';
-    print var->{user}->{profile}->{name};
-
 =cut
 
 sub var {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     my ($key, $value) = @_;
     if (@_ == 2) {
+        # stash variable nesting
+        # ** depreciated **
+        # ** not recommended **
+        # var 'user/profile/name' => 'Mr. Foobar';
         if ($key =~ /\//) {
             $key =~ s/\/+/\//g;
             $key =~ s/(^\/)|(\/$)//g;
             my @keys = split /\//, $key;
-            my $var  = self->{Scrappy}->{stash};
+            my $var  = self->{Prop}->{Stash};
             for (my $i = 0; $i < @keys; $i++) {
                 $var->{$keys[$i]} = $value
                     if ($i+1) == @keys;
@@ -228,11 +221,14 @@ sub var {
             return $value;
         }
         else {
-            self->{Scrappy}->{stash}->{$key} = $value if (@_ == 2);
-            return self->{Scrappy}->{stash}->{$key};
+            self->{Prop}->{Stash}->{$key} = $value if (@_ == 2);
+            return self->{Prop}->{Stash}->{$key};
         }
     }
-    return self->{Scrappy}->{stash};
+    elsif (@_ == 1) {
+        return self->{Prop}->{Stash}->{$_[0]};
+    }
+    return self->{Prop}->{Stash};
 }
 
 =method random_ua
@@ -242,22 +238,21 @@ user-agent header in your request is how an inquiring application might determin
 the browser and environment making the request. The first argument should be the
 name of the web browser, supported web browsers are any, chrome, ie or explorer,
 opera, safari, and firfox. Obviously using the keyword `any` will select from
-any available browser. The second argument which is optional should be the name
+any available browsers. The second argument which is optional should be the name
 of the desired operating system, supported operating systems are windows,
 macintosh, and linux. 
 
-    init;
     user_agent random_ua;
     # same as random_ua 'any';
     
 e.g. for a Linux-specific Google Chrome user-agent use the following...
     
-    init;
     user_agent random_ua 'chrome', 'linux';
 
 =cut
 
 sub random_ua {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     my ($browser, $os) = @_;
        $browser = 'any' unless $browser;
        $browser = 'explorer' if
@@ -325,8 +320,6 @@ sub random_ua {
 The form method is a shortcut to the WWW::Mechanize submit_form method. It take
 the exact same arguments, yada, yada.
 
-    init;
-    get $requested_login_url;
     form fields => {
         username => 'mrmagoo',
         password => 'foobarbaz'
@@ -342,7 +335,8 @@ the exact same arguments, yada, yada.
 =cut
 
 sub form {
-    my $response = self->submit_form(@_);
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    my $response = self->{Mech}->submit_form(@_);
     sleep pause();
     return $response;
 }
@@ -355,11 +349,13 @@ method takes a URL or URI and returns an HTTP::Response object.
 =cut
 
 sub get {
-    my $request = self->get(@_);
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    my $request = self->{Mech}->get(URI->new(@_));
     push @{$class_History}, @_;
     self->{Mech}->{cookie_jar}->scan(\&_cookies_to_session);
     sleep pause();
-    return $request;
+    #headers are in $request;
+    return self;
 }
 
 =method post
@@ -387,7 +383,7 @@ HTTP::Response object. Alternatively the post object can be used traditionally
             post_form_id        => $post_formid,
             fb_dtsg             => 'u9MeI',
             post_form_id_source => 'AsyncRequest'
-        };
+    };
 
 Note! Our prettier version of the post method uses a content-type of
 application/x-www-form-urlencoded by default, to use multipart/form-data,
@@ -396,10 +392,11 @@ please use the traditional style, sorry.
 =cut
 
 sub post {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     my ($url, $params) = @_;
     if ($url && ref($params) eq "HASH") {
         my $request =
-        self->post(
+        self->{Mech}->post(
             $url,
             'Content-Type' => 'application/x-www-form-urlencoded',
             'Content'      => $params
@@ -409,7 +406,7 @@ sub post {
         return $request;
     }
     else {
-        my $request = self->post(@_);
+        my $request = self->{Mech}->post(@_);
         self->{Mech}->{cookie_jar}->scan(\&_cookies_to_session);
         sleep pause();
         return $request;
@@ -418,33 +415,28 @@ sub post {
 
 =method grab
 
-The grab method is a shortcut to the Web::Scraper process method. It take
-the exact same arguments with a little bit of our own added magic, namely you
-can grab and return single-selections and even specify the return values, by
-default the return value of a single-selection is TEXT. Note! Use a hashref
-mapping to return a list of results, this may change in the future.
+The grab method takes XPATH or CSS3 selectors and returns corresponding elements,
+it is a shortcut to the Web::Scraper process method. It take the exact same
+arguments with a little bit of our own added magic, namely you can grab and
+return a single element and specify whether to return TEXT, HTML or and @attribute.
+By default the return value of a single-element is TEXT. Whenever you specify a
+hashref mapping of attributes to grab, the results are returned as an arrayref,
+this may change in the future.
 
-    init;
-    get $requested_url;
     grab '#profile li a'; # return the inner text of the first encounter
     grab '#profile li a', '@href'; # specifically returning href attribute of the first encounter
-    
-    # meaning you can do cool stuff like...
-    var user_name => grab '#profile li a';
     
     # the traditional use is to provide a selector and mappings/return values e.g.
     grab '#profile li a', { name => 'TEXT', link => '@href' };
     
     # feeling lazy, let Scrappy auto-discover the attributes for you
-    grab '#profile li a', ':all';
+    grab '#profile li a', ':all'; # returns an arrayref if more than one element is found
     
-    # Note! using { mappings } or ':all' will return an arrayref and should be used when
-    # trying to select multiple records.
-    # Also Note! elements are returned as objects with accessors making it possible
+    # Note! elements are returned as objects with accessors making it possible
     # to do the following....
     
-    my $label = grab '#profile li a', ':all';
-    print $label->href;
+    my $link = grab '#profile li a:first', ':all';
+    print $link->href;
     
     grab 'a'; # returns inner text of the first match
     grab 'a', 'html'; # returns inner html of the first match
@@ -453,80 +445,45 @@ mapping to return a list of results, this may change in the future.
     grab 'a', ':all'; # returns an arrayref with all attributes including text, and html
     grab 'a', { key => 'attr' }; # returns an arrayref with the specified attributes
 
+Zoom in on specific chunks of html code or pass you own using the following method call:
+
+    grab 'element', ':all', $html_content;
+
 =cut
 
 sub grab {
-    my ($selector, $mapping) = @_;
-    if ($mapping) {
-        if ("HASH" eq ref $mapping) {
-            my $temp = self->scrape( $selector, "data[]", $mapping );
-            return element($temp->{data});
-        }
-        else {
-            if (":all" eq lc $mapping) {
-                my $temp = self->scrape( $selector, "data[]", tattr() );
-                return element($temp->{data});
-            }
-            my $temp = self->scrape( $selector, "data[]", { selected => $mapping } );
-            return $temp->{data}[0]->{selected};
-        }
-    }
-    else {
-        my $temp = self->scrape( $selector, "data[]", { everything => 'TEXT' } );
-        return $temp->{data}[0]->{everything};
-    }
-}
-
-=method zoom
-
-The zoom method is almost exactly the same as the Scrappy grab method except
-that you specify what data to scrape as opposed to the grab method that parses
-the entire page. This is more of a drill-down utility. Note! Use a hashref
-mapping to return a list of results, this may change in the future.
-
-    init;
-    get $requested_url;
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    my ($selector, $mapping, $html) = @_;
     
-    var items => grab '#find ul li', { id => '@id', content => 'HTML' };
-    
-    foreach my $el (list var->{items}) {
-        var->{$el->{id}}->{title} => zoom $el->{content}, '.title';
-    }
-    
-    # just a silly example but zoom has many very good uses
-    # it is more of a drill-down utility
-
-=cut
-
-sub zoom {
-    my ($html, $selector, $mapping) = @_;
-    
-    die "The zoom function needs html and a selector at least to function properly"
+    die "The grab function needs html and a selector at least to function properly"
         unless @_ >= 2;
-        
+    
+    $html ||= html();
+    
     if ($mapping) {
         if ("HASH" eq ref $mapping) {
             
+            my $scraper =
+                scraper {
+                    process
+                        ($selector, "data[]", $mapping) };
+            my $temp = $scraper->scrape( $html );
+            return element($temp->{data});
+        }
+        else {
+            
             if (":all" eq lc $mapping) {
                  my $scraper =
-                    WWW::Mechanize::Plugin::Web::Scraper::scraper {
-                        WWW::Mechanize::Plugin::Web::Scraper::process
+                    scraper {
+                        process
                             ($selector, "data[]", tattr()) };
                 my $temp = $scraper->scrape( $html );
                 return element($temp->{data});
             }
             
             my $scraper =
-                WWW::Mechanize::Plugin::Web::Scraper::scraper {
-                    WWW::Mechanize::Plugin::Web::Scraper::process
-                        ($selector, "data[]", $mapping) };
-            my $temp = $scraper->scrape( $html );
-            return element($temp->{data});
-        }
-        else {
-            my $scraper =
-                WWW::Mechanize::Plugin::Web::Scraper::scraper {
-                    WWW::Mechanize::Plugin::Web::Scraper::process
+                scraper {
+                    process
                         ($selector, "data[]", { selected => $mapping }) };
             my $temp = $scraper->scrape( $html );
             return $temp->{data}[0]->{selected};
@@ -534,8 +491,8 @@ sub zoom {
     }
     else {
         my $scraper =
-                WWW::Mechanize::Plugin::Web::Scraper::scraper {
-                    WWW::Mechanize::Plugin::Web::Scraper::process
+                scraper {
+                    process
                         ($selector, "data[]", { everything => 'TEXT' }) };
         my $temp = $scraper->scrape( $html );
         return $temp->{data}[0]->{everything};
@@ -547,7 +504,6 @@ sub zoom {
 The loaded method is a shortcut to the WWW::Mechanize success method. This
 method returns true/false based on whether the last request was successful.
 
-    init;
     get $requested_url;
     if (loaded) {
         grab ...
@@ -556,7 +512,8 @@ method returns true/false based on whether the last request was successful.
 =cut
 
 sub loaded {
-    return self->success;
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    return self->{Mech}->success;
 }
 
 =method status
@@ -564,7 +521,6 @@ sub loaded {
 The status method is a shortcut to the WWW::Mechanize status method. This
 method returns the 3-digit HTTP status code of the response.
 
-    init;
     get $requested_url;
     if (status == 200) {
         grab ...
@@ -573,7 +529,8 @@ method returns the 3-digit HTTP status code of the response.
 =cut
 
 sub status {
-    return self->status;
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    return self->{Mech}->status;
 }
 
 =method reload
@@ -584,7 +541,8 @@ method acts like the refresh button in a browser, repeats the current request.
 =cut
 
 sub reload {
-    my $response = self->reload;
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    my $response = self->{Mech}->reload;
     sleep pause();
     return $response;
 }
@@ -598,7 +556,8 @@ the previous page (response), it will not backtrack beyond the first request.
 =cut
 
 sub back {
-    my $response = self->back;
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    my $response = self->{Mech}->back;
     sleep pause();
     return $response;
 }
@@ -611,7 +570,8 @@ method returns the URI of the current page as a URI object.
 =cut
 
 sub page {
-    return self->uri;
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    return self->{Mech}->uri;
 }
 
 =method response
@@ -622,7 +582,8 @@ method returns the HTTP::Repsonse object of the current page.
 =cut
 
 sub response {
-    return self->response;
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    return self->{Mech}->response;
 }
 
 =method content_type
@@ -633,7 +594,8 @@ This method returns the content_type of the current page.
 =cut
 
 sub content_type {
-    return self->content_type;
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    return self->{Mech}->content_type;
 }
 
 =method domain
@@ -644,7 +606,8 @@ This method returns URI host of the current page.
 =cut
 
 sub domain {
-    return self->base;
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    return self->{Mech}->base;
 }
 
 =method ishtml
@@ -656,7 +619,8 @@ to the HTTP headers.
 =cut
 
 sub ishtml {
-    return self->is_html;
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    return self->{Mech}->is_html;
 }
 
 =method title
@@ -668,7 +632,8 @@ otherwise returns undef.
 =cut
 
 sub title {
-    return self->title;
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    return self->{Mech}->title;
 }
 
 =method text
@@ -680,6 +645,7 @@ all HTML markup stripped.
 =cut
 
 sub text {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     return data( format => 'text');
 }
 
@@ -691,25 +657,27 @@ returns the content of the current page.
 =cut
 
 sub html {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     return data(@_);
 }
 
 =method data
 
 The data method is a shortcut to the WWW::Mechanize content method. This method
-returns the content of the current page. Additionally this method when passed
-data, updates the content of the current page with that data and
-returns the modified content.
+returns the content of the current page exactly the same as the html function does.
+Additionally this method when passed data, updates the content of the current page
+with that data and returns the modified content.
 
 =cut
 
 sub data {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     if ($_[0]) {
         unless ($_[1]) {
-            self->update_html($_[0]);
+            self->{Mech}->update_html($_[0]);
         }
     }
-    return self->content(@_);
+    return self->{Mech}->content(@_);
 }
 
 =method www
@@ -720,6 +688,7 @@ returns the current scraper application instance.
 =cut
 
 sub www {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     return self(@_);
 }
 
@@ -735,7 +704,8 @@ content-type does not begin with 'text', the content is saved as binary data.
 =cut
 
 sub store {
-    return self->save_content(@_);
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    return self->{Mech}->save_content(@_);
 }
 
 =method download
@@ -755,6 +725,7 @@ resorting to a random 6-charater string only if all else fails.
 =cut
 
 sub download {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     my ($uri, $dir, $file) = @_;
     $dir =~ s/[\\\/]+$//;
      if (@_ == 3) {
@@ -792,6 +763,7 @@ no longer dies if the argument is not an arrayref and instead returns an empty l
 =cut
 
 sub list {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     #die 'The argument passed to the list method must be an arrayref'
     #    if ref($_[0]) ne "ARRAY";
     return ref($_[0]) ne "ARRAY" ? () : @{$_[0]};
@@ -807,6 +779,7 @@ in the array shortening it by one.
 =cut
 
 sub fst {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     my @array = list @_;
     return shift @array;
 }
@@ -821,6 +794,7 @@ in the array shortening it by one.
 =cut
 
 sub lst {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     my @array = list @_;
     return pop @array;
 }
@@ -850,6 +824,7 @@ and note that there is a newline on the alst line of the file:
 =cut
 
 sub session {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     if (@_ == 2) {
         my ($key, $value) = @_;
         if ($key eq "_file" && defined $value) {
@@ -902,11 +877,12 @@ sub session {
 
 =method config
 
-The config method is an alias to the Scrappy session method for readability.
+The config method is an alias to the Scrappy session method for brevity.
 
 =cut
 
 sub config {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     return session @_;
 }
 
@@ -917,17 +893,16 @@ cookie handler. This method returns an HTTP::Cookie object. Setting this as
 undefined using the _undef keyword will prevent cookies from being stored and
 subsequently read.
 
-    init;
     get $requested_url;
     my $cookies = cookies;
     
     # prevent cookie storage
-    init;
     cookies _undef;
 
 =cut
 
 sub cookies {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     self->{Mech}->{cookie_jar} = undef if $_[0] eq '_undef';
     return self->{Mech}->{cookie_jar};
 }
@@ -974,11 +949,9 @@ set the proxy for the next request to be tunneled through. Setting this as
 undefined using the _undef keyword will reset the scraper application instance
 so that all subsequent requests will not use a proxy.
 
-    init;
     proxy 'http', 'http://proxy.example.com:8000/';
     get $requested_url;
     
-    init;
     proxy 'http', 'ftp', 'http://proxy.example.com:8000/';
     get $requested_url;
     
@@ -986,7 +959,6 @@ so that all subsequent requests will not use a proxy.
     
     use Tiny::Try;
     
-    init;
     proxy 'http', 'ftp', 'http://proxy.example.com:8000/';
     
     try {
@@ -994,16 +966,17 @@ so that all subsequent requests will not use a proxy.
     };
     
 Note! When using a proxy to perform requests, be aware that if they fail your
-program will die unless you wrap yoru code in an eval statement or use a try/catch
+program will die unless you wrap your code in an eval statement or use a try/catch
 module. In the example above we use Tiny::Try to trap an errors that might occur
 when using a proxy.
 
 =cut
 
 sub proxy {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     my $proxy    = pop @_;
     my @protocol = @_;
-    return self->proxy([@protocol], $proxy);
+    return self->{Mech}->proxy([@protocol], $proxy);
 }
 
 =method pause
@@ -1011,17 +984,16 @@ sub proxy {
 The pause method is an adaptation of the WWW::Mechanize::Sleep module. This method
 sets breaks between your requests in an attempt to simulate human interaction.
 
-    init;
     pause 20;
     
     get $request_1;
     get $request_2;
     get $request_3;
     
-The will be a break between each request made, get, post, request, etc., You can
-also specify a range to have the pause method select from at random...
+Given the above example, there will be a 20 sencond break between each request made,
+get, post, request, etc., You can also specify a range to have the pause method
+select from at random...
 
-    init;
     pause 5,20;
     
     get $request_1;
@@ -1041,6 +1013,7 @@ download one could obviously...
 =cut
 
 sub pause {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     if ($_[0]) {
         if ($_[1]) {
             my @range = (($_[0] < $_[1] ? $_[0] : 0)..$_[1]);
@@ -1062,6 +1035,63 @@ sub pause {
         
         return $interval;
     }
+}
+
+=method history
+
+The history method returns a list of visted pages.
+
+    get $url_a;
+    get $url_b;
+    get $url_c;
+
+    print history;
+
+=cut
+
+sub history {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    return @{$class_History};
+}
+
+=method denied
+
+The denied method is a simple shortcut to determine if the page you
+requested got loaded or redirected. This method is very useful on systems
+that require authentication and redirect if not authorized. This function
+return boolean, 1 if the current page doesn't match the requested page.
+
+    get $url_to_dashboard;
+    
+    if (denied) {
+        # do login, again
+    }
+    else {
+        # resume ...
+    }
+
+=cut
+
+sub denied {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    my ($last) = reverse history;
+    return 1 if (page ne $last);
+}
+
+=method new
+
+The new method creates a new OO (object-oriented) Scrappy instance. It is worth mentioning that
+Scrappy can be used in both OO (object-oriented) and DSL (domain-specific) fashion.
+Both styles have advantages and drawbacks, we have both so that settles that.
+Please note that a Scrappy instance is created automatically on-the-fly for those
+using DSL syntax.
+
+    my $spidy = Scrappy->new;
+
+=cut
+
+sub new {
+    return init;
 }
 
 our @_queue = ();
@@ -1099,7 +1129,9 @@ sub queue {
 =method crawl
 
 The crawl method is designed to automatically and systematically crawl, spider,
-or fetch webpages and perform actions on selected elements on each page.
+or fetch webpages and perform actions on selected elements on each page. This
+method will start by GETting the initial URL passed, it then iterates over each
+selector executing the corresponding routine for each matched element.
 
     crawl $starting_url, {
         'a' => sub {
@@ -1119,6 +1151,8 @@ or fetch webpages and perform actions on selected elements on each page.
 =cut
 
 sub crawl {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    
     my @array = @_;
     
     my $actions = pop @array;
@@ -1152,7 +1186,9 @@ sub crawl {
     
     # process actions
     if ("hash" eq lc ref $actions) {
-        while (my($selector, $function) = each(%{$actions})) {
+        # while (my($selector, $function) = each(%{$actions}))
+        foreach my $action (keys %{$actions}) {
+            my ($selector, $function) = ($action, $actions->{$action});
             my $findings = grab $selector, ':all';
             if ("array" eq lc ref $findings) {
                 foreach (@{$findings}) {
@@ -1168,6 +1204,8 @@ sub crawl {
     nextPage:
     goto doPage if $_queue[++$_cursor];
 }
+
+## UTILITIES (Not OO nor DSL, Internal Only)
 
 sub element {
     my $object = shift;
@@ -1316,42 +1354,4 @@ sub tattr {
     # need xml and json support maybe?
 }
 
-=method history
-
-The history method returns a list of visted pages.
-
-    get $url_a;
-    get $url_b;
-    get $url_c;
-
-    print history;
-
-=cut
-
-sub history {
-    return @{$class_History};
-}
-
-=method denied
-
-The denied method is a simple shortcut to determine if the page you
-requested got loaded or redirected. This method is very useful on systems
-that require authentication and redirect if not authorized. This function
-return boolean, 1 if the current page doesn't match the requested page.
-
-    get $url_to_dashboard;
-    if (denied) {
-        # do login, again
-    }
-    else {
-        # resume ...
-    }
-
-=cut
-
-sub denied {
-    my ($last) = reverse history;
-    return 1 if (page ne $last);
-}
-
-init;
+1;

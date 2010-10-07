@@ -1,4 +1,4 @@
-# ABSTRACT: All Powerful Web Harvester, Spider, Scraper
+# ABSTRACT: A Magical Scrappy Namespace Where Wild Things Are
 package Scrappy::Doo;
-use base 'Scrappy';
+use Scrappy qw/:syntax/;
 1;

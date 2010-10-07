@@ -1,14 +1,13 @@
 #!/usr/bin/perl
 
-# Scrappy - Your friendly neighborhood web crawler!
+use strict;
+use warnings;
 
 use Scrappy;
 our $spidy = Scrappy->new;
 
-   $spidy->crawl('http://search.cpan.org/recent', {
+    $spidy->crawl('http://search.cpan.org/recent', {
         '#cpansearch li a' => sub {
             print shift->text, "\n";
         }
-   });
-   
-
+    });
