@@ -10,5 +10,3 @@ our $spidy = Scrappy->new;
             print shift->text, "\n";
         }
    });
-   
-

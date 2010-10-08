@@ -2,6 +2,12 @@
 
 package Scrappy::Manual;
 
+=head1 DISCLAIMER
+
+This documentation is incomplete, obviously. For help and support find alnewkirk
+or alnewkirk|com on IRC, or find this project on GitHub. If all else fails, write
+your local congressman.
+
 =head1 WHAT IS SCRAPPY
 
 Scrappy is an easy (and hopefully fun) way of scraping, spidering, and/or
@@ -52,11 +58,5 @@ scraping framework by that name and this module is not a port of that one.
             # do something
         }
     };
-
-=head1 DISCLAIMER
-
-This documentation is incomplete, obviously. For help and support find alnewkirk
-or alnewkirk|com on IRC, or find this project on GitHub. If all else fails, write
-your local congressman.
 
 =cut

@@ -1,34 +1,15 @@
 # Scrappy - All Powerful Web Harvester, Spider, Scraper fully automated
 # TODO
 
-- ver 0.65
+# WISHLIST
   -   add plugin support
   -   whois plugin (imports a function when passed a link returns whois info)
   -   howto and best practices docs
-- ver 0.6
-  x   merge scrappy-doo, allowing auto web crawling
-  x   allow var merging instead of overwriting via merge keyword
-  x   add filter function (drill-down web::scraper utility) - zoom function
   -   investigate performance
   -   add logging (console and/or file)
   -   use HTML::Zoom (transform) to update html page contents
   -   add serializer support (json, yaml, xml)
-- ver 0.59
-  x   add pausing support
-- ver 0.58
-  x   add proxy support
-- ver 0.56
-  x   fixed download function not working
-  x   automatically generate filename for download
-  x   fixed list function failure
-  x   fixed random_ua without arguments warning
-  x   fixed documentation typos
-  x   add functionality for single-select return values (zoom function)
-- ver 0.55
-  x   add cookie and session support
-- ver 0.52
-  x   fixed the fst method
-- ver 0.52
-  x   add fst and lst method which will shift and pop scraped resultsets
-- ver 0.51
-  x   add list keyword, will return an array for iteration given an arrayref or hashref
+  -   allow constraints (content-type, size, etc)
+  -   support all css3 selectors
+# BUGS
+  -   benchmark performance

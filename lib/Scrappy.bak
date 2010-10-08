@@ -1,4 +1,6 @@
-# ABSTRACT: All Powerful Web Harvester, Spider, Scraper fully automated
+# This copy of Scrappy has a auto-following concept I'd like to keep as a reminder
+# and maybe try another approach at it another time ... thanks for listening $self
+# @BSTRACT: All Powerful Web Harvester, Spider, Scraper fully automated
 
 use strict;
 use warnings;
@@ -355,9 +357,11 @@ sub get {
     my $request = self->{Mech}->get($url);
     push @{$class_History}, @_;
     self->{Mech}->{cookie_jar}->scan(\&_cookies_to_session);
-    self->{Prop}->{params} = {};
     self->{Prop}->{params} = +{ map { ($_ => $url->query_param($_) ) } $url->query_param };
+    self->{Prop}->{params} = +{ %{ self->{Prop}->{matches}->{$url->as_string} } } if
+        self->{Prop}->{matches}->{$url->as_string};
     sleep pause();
+    #headers are in $request;
     return self;
 }
 
@@ -419,7 +423,7 @@ sub post {
 =method param
 
 The param method is used to retrieve querystring parameters from the current request.
-This includes any parameters defined using the match() method. This method is never
+This includes any parameters defined using the follow() method. This method is never
 used to set parameters.
 
     my $url = 'http://search.cpan.org/search?query=Scrappy&mode=all';
@@ -428,6 +432,20 @@ used to set parameters.
     print param('query');
     # Scrappy
     
+    .. or ..
+    
+    my $url = 'http://search.cpan.org/';
+    follow 'module_page' => '/:author/:package/lib/:module.pm';
+    
+    crawl $url, {
+        'body' => sub {
+            if (match 'module_page') {
+                print param->{author};
+            }
+        }
+    };
+    
+
 =cut
 
 sub param {
@@ -1146,133 +1164,153 @@ received/input.
 =cut
 
 sub queue {
-    my $self    = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     return @_ ? push @_queue, @_ : @_queue;
 }
 
-=method match
+#=method follow
+#
+#The follow method is designed to define URL paths that should be automatically discovered
+#by the crawl method. The follow method takes psuedo-regex style URLs patterns and tries
+#to match them against auto-discovered URLs. This method is designed to support the crawl method.
+#
+#    ** This Is An Experimental Feature **
+#
+#    follow 'artist_page' => '/band/:artist';
+#    
+#    crawl $url, {
+#        # ...
+#    };
+#
+#=cut
 
-The match method checks the passed-in URL (or URL of the current page if left empty) the URL pattern
-(route) defined. If URL is a match, it will return the parameters of that match much in the same way
-a modern web application framework processes URL routes. 
-
-    my $url = 'http://somesite.com/tags/awesomeness';
-    ...
+sub follow {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    my $options = "HASH" eq ref $_[(@_)-1] ? pop @_ : {};
+    my ($label, $pattern) = @_;
     
-    # match against the current page
-    if (match '/tags/:tag') {
-        print param('tag');
-        # prints awesomeness
-    }
+    my $route = {};
     
-    .. or ..
-    
-    # match against the passed url
-    my $this = match '/tags/:tag', $url, {
-        host => 'somesite.com'
+    Carp::croak("route can't be defined without a valid label and URL pattern")
+        unless $pattern && $label;
+        
+    $route = +{
+        label     => $label,
+        on_match  => $options->{on_match},
     };
     
-    if ($this) {
-        print "This is the ", $this->{tag}, " page";
-        # prints this is the awesomeness page
+    # define options
+    if ( my $host = $options->{host} ) {
+        $route->{host} = $host;
+        $route->{host_re} = ref $host ? $host : qr(^\Q$host\E$);
     }
 
-=cut
+    $route->{pattern} = $pattern;
 
-sub match {
-    my $self    = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
-    my $pattern = shift;
-    my $url     = shift || page; $url = URI->new($url);
-    my $options = shift || {};
-    
-    die "route can't be defined without a valid URL pattern"
-        unless $pattern;
-    
-    my $route = self->{Prop}->{patterns}->{$pattern};
-    
-    # does route definition already exist?
-    unless (keys %{$route}) {
-            
-        $route = +{ on_match  => $options->{on_match} };
-        
-        # define options
-        if ( my $host = $options->{host} ) {
-            $route->{host} = $host;
-            $route->{host_re} = ref $host ? $host : qr(^\Q$host\E$);
-        }
-    
-        $route->{pattern} = $pattern;
-    
-        # compile pattern
-        my @capture;
-        $route->{pattern_re} = do {
-            if ( ref $pattern ) {
-                $route->{_regexp_capture} = 1;
-                $pattern;
-            }
-            else {
-                $pattern =~ s!
-                    \{((?:\{[0-9,]+\}|[^{}]+)+)\} | # /blog/{year:\d{4}}
-                    :([A-Za-z0-9_]+)              | # /blog/:year
-                    (\*)                          | # /blog/*/*
-                    ([^{:*]+)                       # normal string
-                !
-                    if ($1) {
-                        my ($name, $pattern) = split /:/, $1, 2;
-                        push @capture, $name;
-                        $pattern ? "($pattern)" : "([^/]+)";
-                    } elsif ($2) {
-                        push @capture, $2;
-                        "([^/]+)";
-                    } elsif ($3) {
-                        push @capture, '__splat__';
-                        "(.+)";
-                    } else {
-                        quotemeta($4);
-                    }
-                !gex;
-                qr{^$pattern$};
-            }
-        };
-        $route->{capture} = \@capture;    
-        self->{Prop}->{patterns} = +{ $route->{pattern} => $route };
-    }
-    
-    # match
-    if ( $route->{host_re} ) {
-        unless ( $url->host =~ $route->{host_re} ) {
-            return undef;
-        }
-    }
-    
-    if ( my @captured = ( $url->path =~ $route->{pattern_re} ) ) {
-        my %args;
-        my @splat;
-        if ( $route->{_regexp_capture} ) {
-            push @splat, @captured;
+    # compile pattern
+    my @capture;
+    $route->{pattern_re} = do {
+        if ( ref $pattern ) {
+            $route->{_regexp_capture} = 1;
+            $pattern;
         }
         else {
-            for my $i ( 0 .. @{ $route->{capture} } - 1 ) {
-                if ( $route->{capture}->[$i] eq '__splat__' ) {
-                    push @splat, $captured[$i];
+            $pattern =~ s!
+                \{((?:\{[0-9,]+\}|[^{}]+)+)\} | # /blog/{year:\d{4}}
+                :([A-Za-z0-9_]+)              | # /blog/:year
+                (\*)                          | # /blog/*/*
+                ([^{:*]+)                       # normal string
+            !
+                if ($1) {
+                    my ($name, $pattern) = split /:/, $1, 2;
+                    push @capture, $name;
+                    $pattern ? "($pattern)" : "([^/]+)";
+                } elsif ($2) {
+                    push @capture, $2;
+                    "([^/]+)";
+                } elsif ($3) {
+                    push @capture, '__splat__';
+                    "(.+)";
+                } else {
+                    quotemeta($4);
                 }
-                else {
-                    $args{ $route->{capture}->[$i] } = $captured[$i];
-                }
+            !gex;
+            qr{^$pattern$};
+        }
+    };
+    $route->{capture} = \@capture;
+    self->{Prop}->{patterns} = +{ $route->{pattern} => $route };
+    push @{self->{Prop}->{routes}}, $route;
+    
+    return self;
+
+}
+
+#=method match
+#
+#The match method checks the passed-in URL (or current URL if left empty) against all routes
+#defined using the follow() method. If a match is found, it will return the properties of that
+#match which should include the label (name of the matched entry), and the selectors
+#(list of selectors and attributes meant to be applied to the matched page to retrieve additional
+#URLs to follow). Please note that on large pages this automated operation can be expensive.
+#
+#    ** This Is An Experimental Feature **
+#
+#    if (match) {
+#        # safe to follow and grab from
+#    }
+#    
+#    .. or ..
+#    
+#    my $match = match_url;
+#    my $this = match($match);
+#    if ($this) {
+#        print "This is the ", $this->{label}, " page";
+#    }
+#
+#=cut
+
+sub match {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    my $url = shift || page;
+       $url = URI->new($url);
+
+    foreach my $route (@{self->{Prop}->{routes}}) {
+        
+        if ( $route->{host_re} ) {
+            unless ( $url->host =~ $route->{host_re} ) {
+                return undef;
             }
         }
-        my $match =
-          +{ ( label => $route->{label} ), %args, ( @splat ? ( splat => \@splat ) : () ) };
-        if ( $route->{on_match} ) {
-            my $ret = $route->{on_match}->( self, $match );
-            return undef unless $ret;
+        
+        if ( my @captured = ( $url->path =~ $route->{pattern_re} ) ) {
+            my %args;
+            my @splat;
+            if ( $route->{_regexp_capture} ) {
+                push @splat, @captured;
+            }
+            else {
+                for my $i ( 0 .. @{ $route->{capture} } - 1 ) {
+                    if ( $route->{capture}->[$i] eq '__splat__' ) {
+                        push @splat, $captured[$i];
+                    }
+                    else {
+                        $args{ $route->{capture}->[$i] } = $captured[$i];
+                    }
+                }
+            }
+            my $match =
+              +{ ( label => $route->{label} ), %args, ( @splat ? ( splat => \@splat ) : () ) };
+            if ( $route->{on_match} ) {
+                my $ret = $route->{on_match}->( self, $match );
+                return undef unless $ret;
+            }
+            self->{Prop}->{params} = +{ %args };
+            self->{Prop}->{params}->{splat} = \@splat if @splat;
+            return $match;
         }
-        self->{Prop}->{params} = +{ %args };
-        self->{Prop}->{params}->{splat} = \@splat if @splat;
-        return $match;
+        return undef;
+        
     }
-    
-    return undef;
 }
 
 =method crawl
@@ -1296,29 +1334,6 @@ selector executing the corresponding routine for each matched element.
             print shift->src, "\n"
         }
     };
-    
-Lets take it a step further and as opposed to matching elements on every page we encounter,
-lets perform actions on elements that appear on specific types of pages. We do this by utilizing
-URL pattern matching (also known as URL routing in web application framework context).
-
-    crawl 'http://search.cpan.org/recent', {
-        'a' => sub {
-            my $link = shift;
-            queue $link->href if
-            match '/~:author/:dist/', $link->href;
-        },
-        '/~:author/:dist/' => {
-            'body', sub {
-                print "Howdy, I'm looking at " . param('author') . "\n";
-            },
-        }
-    };
-    
-Just to recap, the above example starts crawling at http://search.cpan.org/recent, for the first page
-and every page crawled thereafter, Scrappy will look for the 'a' tag (links) and place them in the queue
-only if they match the defined URL pattern. Also, you'll notice the slightly different structure for the
-second action, which denotes a page action. This basically reads, if the current page matches this URL pattern
-apply the corresponding element actions.
 
 =cut
 
@@ -1356,6 +1371,48 @@ sub crawl {
     
     warn "fetching page " . $_queue[cursor()] if $ENV{Scrappy_Trace};
     
+    # auto-follow as assumed from the use of the follow() method
+    # ** follow() functionality may be discontinued **
+    if (defined self->{Prop}->{routes}) {
+        if (@{self->{Prop}->{routes}}) {
+            # my $selectors = ['a@href', 'img@scr', 'script@src', 'link@href'];
+            my $selectors = ['a@href'];
+            foreach my $selector ( @{$selectors} ) {
+                my ($path, $attribute) = split /\@/, $selector;
+                if ($path && $attribute) {
+                    my $data = grab $path, { url => "\@$attribute" };
+                    if ($data) {
+                        # match time
+                        if ("ARRAY" eq ref $data) {
+                            foreach my $d ( @{$data} ) {
+                                if ($d->url) {
+                                    unless ( self->{Prop}->{matches}->{$d->url} ) {
+                                        my $match = match $d->url;
+                                        if ($match) {
+                                            queue $d->url;
+                                            self->{Prop}->{matches}->{$d->url} = $match;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else {
+                            if ($data->url) {
+                                unless ( self->{Prop}->{matches}->{$data->url} ) {
+                                    my $match = match $data->url;
+                                    if ($match) {
+                                        queue $data->url;
+                                        self->{Prop}->{matches}->{$data->url} = $match;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
     # process actions
     if ("hash" eq lc ref $actions) {
         # while (my($selector, $function) = each(%{$actions}))
@@ -1367,7 +1424,10 @@ sub crawl {
                 my $route = $selector;
                 $selector = (keys %{$actions->{$selector}})[0];
                 $function = $action = $actions->{$route}->{$selector};                
-                if (match $route) {
+                follow this => $route unless self->{Prop}->{patterns}->{$route};
+                # idea for future: have match match page against this pattern only, per request
+                # dont store a list of patterns, etc, current extra loop cycles are happening
+                if (match) {
                     my $findings = grab $selector, ':all';
                     if ("array" eq lc ref $findings) {
                         foreach (@{$findings}) {
