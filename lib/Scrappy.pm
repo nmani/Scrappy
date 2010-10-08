@@ -1369,13 +1369,15 @@ sub crawl {
                 $function = $action = $actions->{$route}->{$selector};                
                 if (match $route) {
                     my $findings = grab $selector, ':all';
-                    if ("array" eq lc ref $findings) {
-                        foreach (@{$findings}) {
-                            $function->($_);
+                    if ($findings) {
+                        if ("array" eq lc ref $findings) {
+                            foreach (@{$findings}) {
+                                $function->($_);
+                            }
                         }
-                    }
-                    else {
-                        $function->($findings);
+                        else {
+                            $function->($findings);
+                        }
                     }
                 }
                 goto nextPage;
@@ -1383,13 +1385,15 @@ sub crawl {
             
             # standard no page constraint condition
             my $findings = grab $selector, ':all';
-            if ("array" eq lc ref $findings) {
-                foreach (@{$findings}) {
-                    $function->($_);
+            if ($findings) {
+                if ("array" eq lc ref $findings) {
+                    foreach (@{$findings}) {
+                        $function->($_);
+                    }
                 }
-            }
-            else {
-                $function->($findings);
+                else {
+                    $function->($findings);
+                }
             }
         }
     }
