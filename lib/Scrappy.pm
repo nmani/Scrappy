@@ -1130,6 +1130,7 @@ fetch. This method returns the position of the cursor in the queue.
 =cut
 
 sub cursor {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     $_cursor = $_[0] if $_[0];
     return $_cursor;
 }
@@ -1147,7 +1148,15 @@ received/input.
 
 sub queue {
     my $self    = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
-    return @_ ? push @_queue, @_ : @_queue;
+    my @url = @_;
+    if (@url) {
+        foreach my $u (@url) {
+            $u = URI->new_abs($u, domain)->as_string;
+            my $foo = $u;
+        }
+        push @_queue, @url;
+    }
+    return @_queue;
 }
 
 =method match
@@ -1400,6 +1409,121 @@ sub crawl {
     
     nextPage:
     goto doPage if $_queue[++$_cursor];
+}
+
+=method crawlers
+
+The crawlers method is designed to make forking your spider super simple. This method
+returns the PID (process ID) for the parent process. This method takes three arguments,
+the number of processes to spawn, and the starting url and selector actions, the same
+as the crawl method.
+
+    
+    crawlers 10, $starting_url, {
+        'a' => sub {
+            # find all links and add them to the queue to be crawled
+            queue shift->href;
+        }
+    };
+
+=cut
+
+sub crawlers {
+    my $self = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
+    
+    my $ppid = undef;
+    
+    my @array = @_;
+    
+    my $instances = shift @array;
+    my $actions   = pop @array;
+    my $url       = shift @array;
+    
+    die 'crawlers need the number of processes to spawn, the starting URL and
+    actions to proceed' unless $url && $actions && $instances;
+    
+    require Parallel::ForkManager;
+    my $forker = new Parallel::ForkManager($instances);
+    
+    queue $url, @array if @array;
+    
+    $_queue[cursor()] = $url;
+    
+    my $go = sub {
+        my $curl = shift;
+        
+        try {
+            get $curl;
+        }
+        catch {
+            warn "problem fetching " . $curl;
+            next;
+        };
+        
+        try {
+            loaded;
+        }
+        catch {
+            warn "problem loading " . $_queue[cursor()];
+            next;
+        };
+        
+        warn "fetching page " . $curl if $ENV{Scrappy_Trace};
+        
+        # process actions
+        if ("hash" eq lc ref $actions) {
+            # while (my($selector, $function) = each(%{$actions}))
+            foreach my $action (keys %{$actions}) {
+                my ($selector, $function) = ($action, $actions->{$action});
+                
+                # page constraint condition
+                if ("code" ne lc ref $function) {
+                    my $route = $selector;
+                    $selector = (keys %{$actions->{$selector}})[0];
+                    $function = $action = $actions->{$route}->{$selector};                
+                    if (match $route) {
+                        my $findings = grab $selector, ':all';
+                        if ($findings) {
+                            if ("array" eq lc ref $findings) {
+                                foreach (@{$findings}) {
+                                    $function->($_);
+                                }
+                            }
+                            else {
+                                $function->($findings);
+                            }
+                        }
+                    }
+                    next;
+                }
+                
+                # standard no page constraint condition
+                my $findings = grab $selector, ':all';
+                if ($findings) {
+                    if ("array" eq lc ref $findings) {
+                        foreach (@{$findings}) {
+                            $function->($_);
+                        }
+                    }
+                    else {
+                        $function->($findings);
+                    }
+                }
+            }
+        }
+    };
+    
+    $go->(shift @_queue); # initial run be spawning
+    
+    if (@_queue) {
+        while (my $curl = shift @_queue) {
+            $forker->start and next;
+            $go->($curl);
+            $forker->finish;
+        }
+    }
+    
+    $forker->wait_all_children;
 }
 
 ## UTILITIES (Not OO nor DSL, Internal Only)
