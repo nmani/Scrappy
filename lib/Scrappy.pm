@@ -1149,13 +1149,17 @@ received/input.
 sub queue {
     my $self    = 'Scrappy' eq ref $_[0] ? shift @_ : undef;
     my @url = @_;
-    if (@url) {
-        foreach my $u (@url) {
-            $u = URI->new_abs($u, domain)->as_string;
-            my $foo = $u;
-        }
-        push @_queue, @url;
-    }
+    # Scrappy::Element href attribute now automatically turns relative URLs
+    # into absolute ones
+    
+    #if (@url) {
+    #    foreach my $u (@url) {
+    #        $u = URI->new_abs($u, domain)->as_string;
+    #    }
+    #    push @_queue, @url;
+    #}
+    
+    push @_queue, @url;
     return @_queue;
 }
 
@@ -1381,11 +1385,11 @@ sub crawl {
                     if ($findings) {
                         if ("array" eq lc ref $findings) {
                             foreach (@{$findings}) {
-                                $function->($_);
+                                $function->($_) if $_;
                             }
                         }
                         else {
-                            $function->($findings);
+                            $function->($findings) if $findings;
                         }
                     }
                 }
@@ -1397,11 +1401,11 @@ sub crawl {
             if ($findings) {
                 if ("array" eq lc ref $findings) {
                     foreach (@{$findings}) {
-                        $function->($_);
+                        $function->($_) if $_;
                     }
                 }
                 else {
-                    $function->($findings);
+                    $function->($findings) if $findings;
                 }
             }
         }
@@ -1416,7 +1420,10 @@ sub crawl {
 The crawlers method is designed to make forking your spider super simple. This method
 returns the PID (process ID) for the parent process. This method takes three arguments,
 the number of processes to spawn, and the starting url and selector actions, the same
-as the crawl method.
+as the crawl method. The crawlers method will spawn the number of crawlers you specify
+exactly but will only spawn them when the queue has enough URLs for each of them to
+process. This means that if you desire 5 processes to performing the specified actions,
+it will only spawn them when the queue has 5 or more URLs in it.
 
     
     crawlers 10, $starting_url, {
@@ -1439,36 +1446,64 @@ sub crawlers {
     my $actions   = pop @array;
     my $url       = shift @array;
     
-    die 'crawlers need the number of processes to spawn, the starting URL and
-    actions to proceed' unless $url && $actions && $instances;
+    die 'the crawlers function needs the number of processes to spawn,
+    the starting URL and actions to proceed' unless $url && $actions && $instances;
     
     require Parallel::ForkManager;
     my $forker = new Parallel::ForkManager($instances);
     
     queue $url, @array if @array;
     
-    $_queue[cursor()] = $url;
+    $_queue[$_cursor] = $url;
     
-    my $go = sub {
-        my $curl = shift;
+    my $forking = 0;
+    my $visited = {};
+    
+    # merge stash and queue from forked processes
+    $forker->run_on_finish( sub {
+            my ( $pid, $xcode, $ident, $xsig, $dump, $passback ) = @_;
+            # retrieve data structure from child
+            if (defined($passback)) {
+                if ("HASH" eq ref $passback) {
+                    if ( $passback->{vars} && $passback->{queue} ) {
+                        if ("HASH" eq ref $passback->{vars}) {
+                            self->{Prop}->{stash} = +{ %{$passback->{vars}} };
+                        }
+                        if ("ARRAY" eq ref $passback->{queue}) {
+                            push @_queue, $_ for @{$passback->{queue}};
+                        }
+                    }
+                }
+            }
+        }
+    );
+    
+    while (my $curl = shift @_queue) {
         
+        my $get_fail = 0;
+        
+        # don't process the same url twice
+        # console('url-skip', $curl) if $visited->{$curl};
+        next if $visited->{$curl}++; 
+        
+        # start forking when queue has a url for each fork
+        if (@_queue >= $instances) {
+            $forker->start and next;
+            $forking = 1;
+        }
+        
+        # start processing
         try {
             get $curl;
         }
         catch {
-            warn "problem fetching " . $curl;
-            next;
+            console('no-fetch', "http error " . status() . " $curl");
+            $get_fail++;
         };
         
-        try {
-            loaded;
-        }
-        catch {
-            warn "problem loading " . $_queue[cursor()];
-            next;
-        };
+        $forker->finish and next if $get_fail;
         
-        warn "fetching page " . $curl if $ENV{Scrappy_Trace};
+        console('fetch-ok', "fetched $curl");
         
         # process actions
         if ("hash" eq lc ref $actions) {
@@ -1486,11 +1521,11 @@ sub crawlers {
                         if ($findings) {
                             if ("array" eq lc ref $findings) {
                                 foreach (@{$findings}) {
-                                    $function->($_);
+                                    $function->($_) if $_;
                                 }
                             }
                             else {
-                                $function->($findings);
+                                $function->($findings) if $findings;
                             }
                         }
                     }
@@ -1502,31 +1537,25 @@ sub crawlers {
                 if ($findings) {
                     if ("array" eq lc ref $findings) {
                         foreach (@{$findings}) {
-                            $function->($_);
+                            $function->($_) if $_;
                         }
                     }
                     else {
-                        $function->($findings);
+                        $function->($findings) if $findings;
                     }
                 }
             }
         }
-    };
-    
-    $go->(shift @_queue); # initial run be spawning
-    
-    if (@_queue) {
-        while (my $curl = shift @_queue) {
-            $forker->start and next;
-            $go->($curl);
-            $forker->finish;
-        }
+        
+        $forker->finish(0, { vars => self->var, queue => \@_queue })
+        if $forking;
+        
     }
     
     $forker->wait_all_children;
 }
 
-## UTILITIES (Not OO nor DSL, Internal Only)
+# utilities (not oo nor dsl, internal only)
 
 sub element {
     my $object = shift;
@@ -1540,6 +1569,15 @@ sub element {
                 *{"Scrappy::Element::$attr"} = sub {
                     return shift->{$attr};
                 }
+            }
+        }
+        # special processing for URLs, turn relative into absolute
+        {
+            no warnings 'redefine';
+            no strict 'refs';
+            *{"Scrappy::Element::href"} = sub {
+                my $u = shift->{href};
+                return URI->new_abs($u, domain())->as_string;
             }
         }
         bless $element, 'Scrappy::Element';
@@ -1673,6 +1711,10 @@ sub tattr {
         'html'           => 'HTML',
     };
     # need xml and json support maybe?
+}
+
+sub console {
+    print "! [". (shift) ."] " . join (", ", @_) . "\n" if $ENV{ScrappyTrace};
 }
 
 1;
