@@ -61,6 +61,7 @@ BEGIN {
         proxy
         pause
         crawl
+	crawlers
         queue
         cursor
         denied
